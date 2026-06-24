@@ -2,6 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
+  <script src="assets/auth.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>โครงสร้างที่ควรแก้ · ลดน้ำท่วมเมืองยะลา</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,7 +25,12 @@
     .rec-pri { flex:0 0 auto; width:22px; height:22px; border-radius:6px; background:#0c3b6e; color:#fff;
       font-size:12px; font-weight:700; display:grid; place-items:center; }
     .rec-type { font-size:12px; font-weight:700; color:var(--ink-900); }
-    .rec-type.hot { color:#b91c1c; } .rec-type.bot { color:#c2410c; }
+    .rec-type.hot { color:#b91c1c; } .rec-type.bot { color:#c2410c; } .rec-type.ret { color:#0f766e; }
+    .rec-foot { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .rec-foot .cost, .rec-foot .bc { font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:6px; }
+    .rec-foot .cost { background:#f1f5f9; color:#475569; }
+    .rec-foot .bc { background:#ecfeff; color:#0e7490; }
+    #map.drawing { cursor:crosshair; }
     .rec p { margin:3px 0 0; font-size:11.5px; color:var(--ink-600); line-height:1.5; }
     .rec .measure { color:var(--ink-900); font-weight:600; }
     .ba { display:flex; align-items:center; gap:10px; margin:10px 0; }
@@ -68,6 +74,7 @@
         <div class="legend-box">
           <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยงน้ำท่วม (hotspot) — ขนาด = พื้นที่</div>
           <div class="row"><span class="dot" style="background:#ea580c"></span> คอขวดระบายน้ำ (bottleneck)</div>
+          <div class="row"><span class="dot" style="background:#0d9488"></span> แก้มลิง/บ่อหน่วงน้ำ (retention)</div>
           <div class="row"><span class="dot" style="background:#2563eb"></span> แนวคันกั้นน้ำที่เสนอ (จำลองก่อน-หลัง)</div>
           <div class="row"><span class="dot" style="background:#fca5a5"></span> เขตน้ำท่วมจริง GISTDA (อ้างอิง)</div>
         </div>
@@ -111,6 +118,26 @@
         <div class="card-body"><div id="recList">กำลังโหลด…</div></div>
       </section>
 
+      <section class="card" style="margin-top:14px;">
+        <div class="card-head"><i class="ti ti-pencil-bolt"></i><h2>ปรับมาตรการสด</h2><span class="sub">interactive</span></div>
+        <div class="card-body">
+          <p style="margin:0 0 9px;font-size:11.5px;color:var(--ink-600);line-height:1.5;">
+            วาดแนวคันกั้นบนแผนที่ แล้วโมเดลจะรันซ้ำทันที วัดว่าอาคารหลุดจากน้ำท่วมกี่หลัง</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button id="btnDrawLevee" class="btn-sim-duration" style="flex:1;min-width:120px;"><i class="ti ti-vector"></i> วาดแนวคันกั้น</button>
+            <button id="btnAddPump" class="btn-sim-duration" style="flex:1;min-width:90px;"><i class="ti ti-windmill"></i> + จุดสูบ</button>
+            <button id="btnAddPond" class="btn-sim-duration" style="flex:1;min-width:90px;"><i class="ti ti-circle-dashed"></i> + แก้มลิง</button>
+            <button id="btnClearWhatif" class="btn-sim-duration" style="flex:0 0 auto;"><i class="ti ti-trash"></i></button>
+          </div>
+          <p id="engineMsg" style="margin:9px 0 0;font-size:11px;color:var(--ink-500);">กำลังโหลดเครื่องจำลอง…</p>
+          <div class="ba" style="margin:11px 0 0;">
+            <div class="box b1"><div class="n" id="wiProtected">0</div><div style="font-size:10.5px;color:var(--ink-500);">อาคารป้องกันได้</div></div>
+            <div class="box" style="background:#f8fafc;"><div class="n" id="wiCost" style="color:#0c3b6e;font-size:17px;">0</div><div style="font-size:10.5px;color:var(--ink-500);">งบรวม (ล้าน฿)</div></div>
+            <div class="box" style="background:#eff6ff;"><div class="n" id="wiBC" style="color:#0369a1;font-size:17px;">–</div><div style="font-size:10.5px;color:var(--ink-500);">อาคาร/ล้าน฿</div></div>
+          </div>
+        </div>
+      </section>
+
       <div class="sim-disclaimer" style="margin:14px 0 4px;">
         <i class="ti ti-alert-triangle"></i>
         <span>ผลเป็นระดับ <b>screening</b> บน DEM FABDEM 30 ม. (±5 ม.) — ใช้ <b>เลือกจุด/เทียบมาตรการ</b> ได้
@@ -122,6 +149,7 @@
 
 <script src="assets/live_status.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="assets/flood_engine.js"></script>
 <script>
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
   // clock
@@ -156,6 +184,9 @@
         } else if(p.kind==='bottleneck'){
           L.circleMarker([lat,lon], { radius:8, color:'#fff', weight:2, fillColor:'#ea580c', fillOpacity:0.95 })
             .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)).addTo(map);
+        } else if(p.kind==='retention'){
+          L.circleMarker([lat,lon], { radius:9, color:'#fff', weight:2, fillColor:'#0d9488', fillOpacity:0.95 })
+            .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)).addTo(map);
         }
         bounds.push([lat,lon]);
       }
@@ -175,17 +206,99 @@
       if(s.levee_demo.needs_pump) document.getElementById('baPump').textContent = '(ต้องมีสถานีสูบร่วม)';
     }
     var html = (s.recommendations||[]).map(function(r){
-      var cls = /hotspot/.test(r.type)?'hot':(/bottleneck/.test(r.type)?'bot':'');
+      var cls = r.kind==='hotspot'?'hot':(r.kind==='bottleneck'?'bot':(r.kind==='retention'?'ret':''));
       var detail = r.buildings!=null ? ('อาคารโดน '+r.buildings+' หลัง · ลึก ~'+r.depth_mean_m+' ม.')
-                 : (r.drain_cm!=null ? ('ความจุระบายปัจจุบัน '+r.drain_cm+' ซม.') : '');
+                 : (r.storage_m3!=null ? ('ความจุเก็บกัก ~'+r.storage_m3.toLocaleString()+' ลบ.ม. ('+r.area_rai+' ไร่)')
+                 : (r.drain_cm!=null ? ('ความจุระบายปัจจุบัน '+r.drain_cm+' ซม.') : ''));
+      var cost = r.cost_thb ? '<span class="cost">💰 ~'+(r.cost_thb/1e6).toFixed(1)+' ล้าน฿</span>' : '';
+      var bc = (r.benefit_per_million!=null) ? '<span class="bc">'+r.benefit_per_million+' อาคาร/ล้าน฿</span>' : '';
       return '<div class="rec"><div class="rec-head"><span class="rec-pri">'+esc(r.priority)+'</span>'
         + '<span class="rec-type '+cls+'">'+esc(r.type)+'</span></div>'
         + '<p>'+esc(detail)+'</p>'
         + '<p class="measure"><i class="ti ti-arrow-badge-right"></i> '+esc(r.measure)+'</p>'
-        + '<p>คาดผล: '+esc(r.expected)+'</p></div>';
+        + '<p>คาดผล: '+esc(r.expected)+'</p>'
+        + '<div class="rec-foot">'+cost+bc+'</div></div>';
     }).join('');
     document.getElementById('recList').innerHTML = html || 'ไม่มีข้อมูล';
   }).catch(e=>{ document.getElementById('recList').textContent='โหลดสรุปไม่ได้'; });
+
+  // ===== โหมดปรับมาตรการสด (interactive what-if) =====
+  var engine=null, drawing=false, placeMode=null, drawPts=[], drawLine=null;
+  var whatifLayer=L.layerGroup().addTo(map), driedLayer=L.layerGroup().addTo(map);
+  var totalProtected=0, totalCost=0;
+  var LEVEE_RATE=30000, PUMP_COST=5000000, POND_COST=10000000;
+  var $=function(id){ return document.getElementById(id); };
+  var fmtM=function(n){ return (n/1e6).toFixed(1); };
+  function tally(){ $('wiProtected').textContent=totalProtected; $('wiCost').textContent=fmtM(totalCost);
+    $('wiBC').textContent = totalCost>0 ? (totalProtected/(totalCost/1e6)).toFixed(2) : '–'; }
+  function cursor(){ $('map').classList.toggle('drawing', drawing || !!placeMode); }
+
+  FloodEngine.init().then(function(){
+    engine=FloodEngine;
+    $('engineMsg').innerHTML='พร้อมแล้ว · baseline อาคารท่วม <b>'+engine.baseFloodedBld.toLocaleString()+'</b> หลัง (ระดับ '+engine.designStage+' ม.)';
+  }).catch(function(e){ $('engineMsg').textContent='โหลดเครื่องจำลองไม่ได้ (ตรวจ dem_grid/buildings_grid)'; console.warn(e); });
+
+  $('btnDrawLevee').onclick=function(){
+    if(!engine) return;
+    placeMode=null;
+    drawing=!drawing; this.classList.toggle('active', drawing); cursor();
+    if(drawing){ drawPts=[]; $('engineMsg').textContent='คลิกวางจุดแนวคันกั้นบนแผนที่ แล้วกด "วาดแนวคันกั้น" อีกครั้งเพื่อจบ'; }
+    else if(drawPts.length>=2){ runLevee(); }
+    else { $('engineMsg').textContent='ยกเลิกการวาด'; }
+  };
+  function setPlace(mode){
+    if(!engine) return;
+    drawing=false; $('btnDrawLevee').classList.remove('active');
+    placeMode=(placeMode===mode)?null:mode;
+    $('btnAddPump').classList.toggle('active', placeMode==='pump');
+    $('btnAddPond').classList.toggle('active', placeMode==='pond');
+    cursor();
+    if(placeMode) $('engineMsg').textContent=(placeMode==='pump'?'คลิกวางสถานีสูบน้ำ':'คลิกวางแก้มลิง/บ่อหน่วง')+' บนแผนที่';
+  }
+  $('btnAddPump').onclick=function(){ setPlace('pump'); };
+  $('btnAddPond').onclick=function(){ setPlace('pond'); };
+  $('btnClearWhatif').onclick=function(){
+    whatifLayer.clearLayers(); driedLayer.clearLayers();
+    totalProtected=0; totalCost=0; drawing=false; placeMode=null; drawPts=[]; drawLine=null;
+    $('btnDrawLevee').classList.remove('active'); $('btnAddPump').classList.remove('active'); $('btnAddPond').classList.remove('active');
+    cursor(); tally();
+    if(engine) $('engineMsg').innerHTML='ล้างแล้ว · baseline อาคารท่วม <b>'+engine.baseFloodedBld.toLocaleString()+'</b> หลัง';
+  };
+
+  map.on('click', function(e){
+    if(drawing){
+      drawPts.push([e.latlng.lat, e.latlng.lng]);
+      if(drawLine) whatifLayer.removeLayer(drawLine);
+      drawLine=L.polyline(drawPts,{color:'#2563eb',weight:3,dashArray:'5,4'}); whatifLayer.addLayer(drawLine);
+    } else if(placeMode==='pump'){
+      L.circleMarker(e.latlng,{radius:8,color:'#fff',weight:2,fillColor:'#ea580c',fillOpacity:0.95}).addTo(whatifLayer)
+        .bindPopup('สถานีสูบน้ำ (+'+fmtM(PUMP_COST)+' ล้าน฿)');
+      totalCost+=PUMP_COST; tally();
+      $('engineMsg').innerHTML='เพิ่มสถานีสูบ · งบ +'+fmtM(PUMP_COST)+' ล้าน฿ <span style="color:#b45309">(ลดความลึก/ระยะเวลา — ปริมาตรจริงต้อง SWMM)</span>';
+    } else if(placeMode==='pond'){
+      L.circle(e.latlng,{radius:130,color:'#0d9488',weight:2,fillColor:'#0d9488',fillOpacity:0.25}).addTo(whatifLayer)
+        .bindPopup('แก้มลิง/บ่อหน่วง (+'+fmtM(POND_COST)+' ล้าน฿)');
+      totalCost+=POND_COST; tally();
+      $('engineMsg').innerHTML='เพิ่มแก้มลิง · งบ +'+fmtM(POND_COST)+' ล้าน฿ <span style="color:#b45309">(หน่วงน้ำ — ปริมาตรจริงต้อง SWMM)</span>';
+    }
+  });
+
+  function runLevee(){
+    cursor();
+    $('engineMsg').textContent='กำลังรันโมเดล…';
+    setTimeout(function(){          // ให้ UI อัปเดตข้อความก่อนคำนวณ
+      var cells=engine.cellsAlongLine(drawPts,1);
+      var res=engine.simulateBarrier(cells);
+      L.polyline(drawPts,{color:'#1d4ed8',weight:4}).addTo(whatifLayer);
+      res.driedCells.slice(0,5000).forEach(function(i){
+        L.rectangle(engine.cellBounds(i),{stroke:false,fillColor:'#34d399',fillOpacity:0.4}).addTo(driedLayer); });
+      var lengthM=0; for(var s=0;s<drawPts.length-1;s++) lengthM+=map.distance(drawPts[s],drawPts[s+1]);
+      var cost=Math.round(lengthM*LEVEE_RATE);
+      totalProtected+=res.protected; totalCost+=cost; tally();
+      $('engineMsg').innerHTML='คันกั้นยาว ~'+Math.round(lengthM).toLocaleString()+' ม. (~'+fmtM(cost)+' ล้าน฿) → ป้องกันเพิ่ม <b style="color:#047857">'+res.protected+'</b> หลัง';
+      drawPts=[]; drawLine=null;
+    }, 30);
+  }
 </script>
 </body>
 </html>

@@ -241,91 +241,163 @@ bottlenecks.sort(key=lambda b: -b["flowacc"])
 bottlenecks = bottlenecks[:5]
 print(f"bottlenecks (top {len(bottlenecks)})")
 
-# ---------- 6) what-if: คันกั้น/คันดินรอบ hotspot อันดับ 1 ----------
-levee = None
-if zones:
-    z = zones[0]
+# ---------- ต้นทุนคร่าว ๆ (สมมุติเพื่อจัดลำดับ benefit/cost — ไม่ใช่ราคาออกแบบจริง) ----------
+LEVEE_RATE = 30000        # บาท/เมตร (กำแพง/คันกั้น)
+PUMP_COST  = 5_000_000    # บาท/สถานีสูบ
+DRAIN_COST = 2_000_000    # บาท/จุด (เพิ่มท่อ/คูระบาย)
+POND_RATE  = 1200         # บาท/ลบ.ม. ความจุเก็บกัก
+POND_DEPTH = 2.0          # ม. (ความลึกบ่อหน่วงสมมุติ)
+
+def buildings_near(i, rad=10):
+    r0, c0 = divmod(int(i), NC); s = 0.0
+    for r in range(max(0, r0 - rad), min(NR, r0 + rad + 1)):
+        for c in range(max(0, c0 - rad), min(NC, c0 + rad + 1)):
+            s += bld[r * NC + c]
+    return int(s)
+
+# ---------- 6) what-if: คันกั้น/คันดินรอบ hotspot (จำลองซ้ำทุกโซน) ----------
+def levee_for_zone(z):
     zmask = np.zeros(N, dtype=bool); zmask[z["cells"]] = True
-    # perimeter = เซลล์ในโซนที่ติดเซลล์นอกโซน → ยกเป็นคันกั้นถึง design+freeboard
-    elev2 = ground.copy()
-    perim = []
+    elev2 = ground.copy(); perim = []
     for i in z["cells"]:
         r, c = divmod(int(i), NC)
-        edge = False
         for dr, dc in NB:
             nr, nc = r + dr, c + dc
             if not (0 <= nr < NR and 0 <= nc < NC) or not zmask[nr * NC + nc]:
-                edge = True; break
-        if edge:
-            perim.append(int(i))
+                perim.append(int(i)); break
     for i in perim:
         elev2[i] = max(elev2[i], DESIGN_S + FREEBOARD)
-    # channel ที่อยู่ในโซน = ยังเป็น seed (น้ำผุดจากในโซนได้ → ต้องมีสูบ); seed ที่เหลือเท่าเดิม
     arrival2 = priority_flood(elev2, channel)
     flooded2 = inStudy & np.isfinite(arrival2) & (arrival2 <= DESIGN_S)
     before = int(bld[zmask & flooded0].sum())
     after = int(bld[zmask & flooded2].sum())
-    protected = max(0, before - after)
-    cells = z["cells"]; rs = cells // NC; cs = cells % NC
+    rs = z["cells"] // NC; cs = z["cells"] % NC
     poly = hull([(round(lonOf(c), 6), round(latOf(r), 6)) for r, c in zip(rs, cs)])
-    levee = {"protects_buildings": protected, "before": before, "after": after,
-             "area_rai": z["area_rai"], "lon": z["lon"], "lat": z["lat"],
-             "polygon": poly,
-             "needs_pump": after > before * 0.25}    # ถ้ายังท่วมเยอะ = มี seed/ฝนในโซน ต้องสูบร่วม
-    print(f"levee @ zone#1: ก่อน {before} → หลัง {after} อาคาร · ป้องกันได้ {protected}"
+    length_m = len(perim) * 30          # ปริมณฑลคันกั้นโดยประมาณ
+    needs_pump = after > before * 0.25
+    cost = length_m * LEVEE_RATE + (PUMP_COST if needs_pump else 0)
+    return {"before": before, "after": after, "protected": max(0, before - after),
+            "polygon": poly, "length_m": length_m, "needs_pump": needs_pump, "cost": cost}
+
+for z in zones:
+    z["levee"] = levee_for_zone(z)
+levee = zones[0]["levee"] if zones else None
+if levee:
+    print(f"levee @ zone#1: ก่อน {levee['before']} → หลัง {levee['after']} · ป้องกัน {levee['protected']}"
           + (" (ต้องมีสูบร่วม)" if levee["needs_pump"] else ""))
+
+# ---------- 7) แก้มลิง/บ่อหน่วงน้ำ ที่จุด flow-accumulation สูงสุด ----------
+pond_thr = np.percentile(flowAcc[inStudy], 99)
+pl, pn = components(inStudy & (flowAcc >= pond_thr) & reach)
+ponds = []
+for k in range(pn):
+    cells = np.where(pl == k)[0]
+    if len(cells) < 4:
+        continue
+    rs = cells // NC; cs = cells % NC
+    lon = float(np.mean([lonOf(c) for c in cs])); lat = float(np.mean([latOf(r) for r in rs]))
+    area_m2 = len(cells) * 900
+    storage = area_m2 * POND_DEPTH                      # ลบ.ม.
+    ponds.append({"lon": lon, "lat": lat, "flowacc": float(flowAcc[cells].max()),
+                  "area_rai": round(area_m2 / 1600), "storage_m3": int(storage),
+                  "cost": int(storage * POND_RATE),
+                  "near_buildings": buildings_near(int(cells[len(cells) // 2]))})
+ponds.sort(key=lambda p: -p["flowacc"])
+ponds = ponds[:3]
+print(f"retention ponds (top {len(ponds)})")
+
+def per_million(benefit, cost):
+    return round(benefit / (cost / 1e6), 2) if cost else 0.0
 
 # ---------- เขียน GeoJSON ----------
 feats = []
 for rank, z in enumerate(zones, 1):
+    lv = z["levee"]
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(z["lon"], 6), round(z["lat"], 6)]},
         "properties": {"kind": "hotspot", "rank": rank, "buildings": z["buildings"],
                        "depth_mean_m": z["depth_mean"], "area_rai": z["area_rai"],
                        "radius_m": int((z["n"] * 900 / 3.1416) ** 0.5),
+                       "protects_buildings": lv["protected"], "cost_thb": lv["cost"],
                        "label": f"จุดเสี่ยงอันดับ {rank}",
-                       "rationale": f"ท่วมในเหตุการณ์ออกแบบ ~{z['depth_mean']} ม. · อาคารโดน {z['buildings']} หลัง"}})
+                       "rationale": f"ท่วม ~{z['depth_mean']} ม. · อาคารโดน {z['buildings']} หลัง · คันกั้นป้องกันได้ ~{lv['protected']} หลัง"}})
 for i, b in enumerate(bottlenecks, 1):
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(b["lon"], 6), round(b["lat"], 6)]},
-        "properties": {"kind": "bottleneck", "rank": i, "drain_cm": b["drain_cm"],
+        "properties": {"kind": "bottleneck", "rank": i, "drain_cm": b["drain_cm"], "cost_thb": DRAIN_COST,
                        "label": f"คอขวดระบายน้ำ {i}",
                        "rationale": f"น้ำไหลมารวมสูง แต่ความจุระบายเพียง {b['drain_cm']} ซม. → ควรเพิ่มท่อ/สูบ"}})
-if levee and levee["polygon"]:
-    ring = levee["polygon"] + [levee["polygon"][0]]
+for i, p in enumerate(ponds, 1):
     feats.append({"type": "Feature",
-        "geometry": {"type": "Polygon", "coordinates": [[[p[0], p[1]] for p in ring]]},
-        "properties": {"kind": "levee", "protects_buildings": levee["protects_buildings"],
-                       "area_rai": levee["area_rai"], "needs_pump": levee["needs_pump"],
-                       "label": "แนวคันกั้นน้ำรอบพื้นที่เสี่ยงอันดับ 1",
-                       "rationale": f"ล้อมคันกั้น+สูบ → ป้องกันอาคารได้ ~{levee['protects_buildings']} หลัง"}})
+        "geometry": {"type": "Point", "coordinates": [round(p["lon"], 6), round(p["lat"], 6)]},
+        "properties": {"kind": "retention", "rank": i, "area_rai": p["area_rai"],
+                       "storage_m3": p["storage_m3"], "cost_thb": p["cost"],
+                       "label": f"แก้มลิง/บ่อหน่วงน้ำ {i}",
+                       "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม."}})
+for rank, z in enumerate(zones, 1):
+    lv = z["levee"]
+    if lv["polygon"]:
+        ring = lv["polygon"] + [lv["polygon"][0]]
+        feats.append({"type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": [[[p[0], p[1]] for p in ring]]},
+            "properties": {"kind": "levee", "rank": rank, "protects_buildings": lv["protected"],
+                           "area_rai": z["area_rai"], "needs_pump": lv["needs_pump"], "cost_thb": lv["cost"],
+                           "length_m": lv["length_m"],
+                           "label": f"แนวคันกั้นน้ำรอบจุดเสี่ยงอันดับ {rank}",
+                           "rationale": f"ล้อมคันกั้น{'+สูบ' if lv['needs_pump'] else ''} → ป้องกัน ~{lv['protected']} หลัง"}})
 
 fc = {"type": "FeatureCollection", "name": "intervention_candidates",
       "_meta": {"design_stage_m": DESIGN_S, "method": "Priority-Flood screening on FABDEM 30m",
                 "generated_by": "scripts/analyze_interventions.py"}, "features": feats}
 json.dump(fc, open(os.path.join(D, "intervention_candidates.geojson"), "w", encoding="utf-8"), ensure_ascii=False)
 
-# ---------- เขียน summary (สำหรับ panel จัดอันดับ) ----------
+# ---------- buildings grid (สำหรับ engine จำลองสดในเบราว์เซอร์) ----------
+json.dump({"ncols": NC, "nrows": NR, "counts": [int(x) for x in bld],
+           "total": int(bld.sum())},
+          open(os.path.join(D, "buildings_grid.json"), "w", encoding="utf-8"))
+
+# ---------- เขียน summary (จัดอันดับ + cost/benefit) ----------
 recs = []
 for rank, z in enumerate(zones, 1):
-    recs.append({"priority": rank, "type": "พื้นที่เสี่ยง (hotspot)",
-                 "where": f"ละติจูด {z['lat']:.3f}, ลองจิจูด {z['lon']:.3f}",
+    lv = z["levee"]
+    recs.append({"type": "พื้นที่เสี่ยง (hotspot)", "kind": "hotspot",
+                 "where": f"{z['lat']:.3f}, {z['lon']:.3f}",
                  "buildings": z["buildings"], "depth_mean_m": z["depth_mean"],
-                 "measure": "คันกั้นน้ำรอบพื้นที่ + สถานีสูบ / ยกระดับถนนรอบนอก",
-                 "expected": f"ป้องกันอาคารได้สูงสุด ~{z['buildings']} หลัง"})
+                 "measure": "คันกั้นน้ำรอบพื้นที่" + (" + สถานีสูบ" if lv["needs_pump"] else "") + " / ยกถนนรอบนอก",
+                 "protects_buildings": lv["protected"], "cost_thb": lv["cost"],
+                 "benefit_per_million": per_million(lv["protected"], lv["cost"]),
+                 "expected": f"ป้องกันอาคารได้ ~{lv['protected']} หลัง (จากที่ท่วม {lv['before']})"})
+for p in ponds:
+    recs.append({"type": "แก้มลิง/บ่อหน่วงน้ำ (retention)", "kind": "retention",
+                 "where": f"{p['lat']:.3f}, {p['lon']:.3f}",
+                 "storage_m3": p["storage_m3"], "area_rai": p["area_rai"],
+                 "measure": f"บ่อหน่วงน้ำ ~{p['area_rai']} ไร่ ที่จุดน้ำไหลมารวมหลัก",
+                 "protects_buildings": None, "cost_thb": p["cost"],
+                 "benefit_per_million": per_million(p["near_buildings"], p["cost"]),
+                 "expected": f"หน่วงน้ำ ~{p['storage_m3']:,} ลบ.ม. ลดยอดน้ำท่วมท้ายน้ำ (ปริมาตรจริงต้อง SWMM)"})
 for i, b in enumerate(bottlenecks, 1):
-    recs.append({"priority": len(zones) + i, "type": "คอขวดระบายน้ำ (bottleneck)",
-                 "where": f"ละติจูด {b['lat']:.3f}, ลองจิจูด {b['lon']:.3f}",
-                 "drain_cm": b["drain_cm"],
+    recs.append({"type": "คอขวดระบายน้ำ (bottleneck)", "kind": "bottleneck",
+                 "where": f"{b['lat']:.3f}, {b['lon']:.3f}", "drain_cm": b["drain_cm"],
                  "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
+                 "protects_buildings": None, "cost_thb": DRAIN_COST,
+                 "benefit_per_million": None,
                  "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"})
+# จัดลำดับ: มี benefit/cost มาก่อน (มากสุด→น้อย) แล้วตามด้วยที่ไม่มีตัวเลข
+recs.sort(key=lambda r: (r["benefit_per_million"] is None, -(r["benefit_per_million"] or 0)))
+for i, r in enumerate(recs, 1):
+    r["priority"] = i
+
 summary = {"design_stage_m": DESIGN_S,
            "baseline_buildings_flooded": bld_flooded0,
            "baseline_flood_cells": int(flooded0.sum()),
-           "levee_demo": levee and {k: levee[k] for k in ("protects_buildings", "before", "after", "area_rai", "needs_pump")},
+           "levee_demo": levee and {"protects_buildings": levee["protected"], "before": levee["before"],
+                                    "after": levee["after"], "needs_pump": levee["needs_pump"],
+                                    "cost_thb": levee["cost"]},
+           "cost_note": "ต้นทุนเป็นค่าสมมุติคร่าว ๆ (คันกั้น 30,000 ฿/ม. · สูบ 5 ล้าน฿ · ท่อ 2 ล้าน฿ · บ่อหน่วง 1,200 ฿/ลบ.ม.) "
+                        "ใช้จัดลำดับ benefit/cost เท่านั้น ไม่ใช่ราคาจริง",
            "recommendations": recs,
            "method_note": "ระดับ screening บน Priority-Flood (DEM FABDEM 30 ม., ±5 ม.) — ใช้เลือกจุด/เทียบมาตรการ "
                           "ไม่ใช่ออกแบบขนาดจริง (ต้อง HEC-RAS 2D + SWMM + LiDAR)",
            "generated": __import__("datetime").date.today().isoformat()}
 json.dump(summary, open(os.path.join(D, "intervention_summary.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-print(f"\n✅ wrote data/intervention_candidates.geojson ({len(feats)} features) + intervention_summary.json")
+print(f"\n✅ wrote intervention_candidates.geojson ({len(feats)} feats) + intervention_summary.json + buildings_grid.json")
