@@ -1,9 +1,10 @@
 {
-  "ground_truth": "GISTDA recurrent flood 2011–2023",
-  "city_cells": 6545,
-  "gistda_coverage_pct": 9.4,
-  "auc_freq3": 0.835,
-  "auc_any": 0.768,
-  "spearman": -0.276,
-  "generated": "2026-06-11"
+  "ground_truth": "GISTDA flood layers (satellite polygons + riverbank points + official overflow lines), 0–3 agreement",
+  "method": "Priority-Flood (minimax connectivity) on dem_grid.json (AW3D30 30m), seeded from real channel cells",
+  "city_cells": 26195,
+  "gistda_coverage_pct": 14.6,
+  "auc_any": 0.746,
+  "auc_agree2": 0.82,
+  "spearman": -0.306,
+  "generated": "2026-06-24"
 }
