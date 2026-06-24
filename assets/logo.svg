@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Yala Flood GIS">
+  <defs>
+    <linearGradient id="yfg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5ccbf7"/>
+      <stop offset="1" stop-color="#0270b5"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="17" fill="url(#yfg)"/>
+  <g fill="none" stroke="#ffffff" stroke-width="3.7" stroke-linecap="round">
+    <path d="M13 25 q4.75 -6 9.5 0 t9.5 0 t9.5 0 t9.5 0"/>
+    <path d="M13 36 q4.75 -6 9.5 0 t9.5 0 t9.5 0 t9.5 0" opacity=".85"/>
+    <path d="M13 47 q4.75 -6 9.5 0 t9.5 0 t9.5 0 t9.5 0" opacity=".7"/>
+  </g>
+</svg>
