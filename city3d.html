@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>โมเดล 3D เมืองยะลา · Yala 3D City</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css" integrity="sha384-/Bmojb1H/9dHvtYa2TzEQ1MldjNefaS+t7DcnOYHpP+yer5gvd3LONWEpWhHK+Yo" crossorigin="anonymous">
   <style>
     html,body { margin:0; height:100%; font-family:'Sarabun',sans-serif; }
     #map { position:absolute; inset:0; }
@@ -45,6 +45,8 @@
   <h1><i class="ti ti-building-skyscraper"></i> โมเดล 3D เมืองยะลา</h1>
   <p>ตึก <b id="bCount">…</b> หลัง จาก Microsoft ML Footprints · ความสูงไล่สีตามระดับ<br>
      ลากเมาส์ขวา/สองนิ้ว = เอียง-หมุน · <a href="dashboard.html" target="_top">📊 แดชบอร์ดวิเคราะห์ 2D →</a></p>
+  <p style="margin:7px 0 0;padding-top:7px;border-top:1px solid #e2e8f0;font-size:10px;color:#92682a;line-height:1.45;">
+     <i class="ti ti-alert-triangle" style="font-size:11px;"></i> ผลน้ำท่วมเป็นระดับ <b>screening</b> บน DEM FABDEM 30 ม. (±5 ม.) — ยังไม่ใช่การพยากรณ์ระดับน้ำจริง</p>
 </div>
 
 <div class="panel legend">
@@ -65,7 +67,7 @@
   <div class="muted">ชั้นน้ำวางบนพื้น เห็นน้ำล้อมฐานตึก (depth ระดับ screening)</div>
 </div>
 
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
 <script>
 const map = new maplibregl.Map({
   container: 'map',
@@ -95,7 +97,7 @@ let _built = false;
 async function buildScene() {
   if (_built) return; _built = true;
 
-  // ---- terrain จริง (AW3D30) → พื้น/ถนน/ตึก ตามความสูงภูมิประเทศ ----
+  // ---- terrain จริง (FABDEM bare-earth) → พื้น/ถนน/ตึก ตามความสูงภูมิประเทศ ----
   if (!map.getSource('terrain-dem')) {
     map.addSource('terrain-dem', { type:'raster-dem', tiles:['terrain/{z}/{x}/{y}.png'],
       encoding:'terrarium', tileSize:256, minzoom:12, maxzoom:16 });

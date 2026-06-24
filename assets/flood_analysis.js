@@ -1,7 +1,7 @@
 /* ============================================================================
  * flood_analysis.js
  * ----------------------------------------------------------------------------
- * ตัววิเคราะห์การแพร่ของน้ำท่วมจาก DEM จริง (AW3D30) สำหรับเทศบาลนครยะลา
+ * ตัววิเคราะห์การแพร่ของน้ำท่วมจาก DEM จริง (FABDEM bare-earth) สำหรับเทศบาลนครยะลา
  *
  * วิธีการ (screening-level, ก่อนต่อยอดเป็น HEC-RAS 2D):
  *   Priority-Flood / minimax-connectivity flooding
@@ -35,7 +35,7 @@
   const setStatus = (m) => { if (elNote) elNote.textContent = m; };
 
   // --- สถานการณ์: pct = สัดส่วนพื้นที่เมืองที่ถูกน้ำท่วม ณ จุดสูงสุด ---
-  // (pace ตามลำดับการท่วมจริง เพราะ AW3D30 30 ม. ปั้นระดับสัมบูรณ์ไม่แม่นพอ — ดู README/AAR)
+  // (pace ตามลำดับการท่วมจริง เพราะ FABDEM 30 ม. ปั้นระดับสัมบูรณ์ไม่แม่นพอ — ดู README/AAR)
   const SCENARIOS = {
     base:   { name: "น้ำหลากจากแม่น้ำปัตตานี (ปกติ)", pct: 0.35, depthRef: 0.6  },
     high:   { name: "เขื่อนบางลางเร่งระบาย (วิกฤต)",  pct: 0.65, depthRef: 1.2  },
@@ -147,7 +147,7 @@
   setStatus("กำลังโหลดและวิเคราะห์ภูมิประเทศ (DEM)...");
   const j = (u) => fetch(u).then((r) => r.json()).catch(() => null);
   Promise.all([
-    fetch("data/output_AW3D30.tif").then((r) => r.arrayBuffer()),
+    fetch("data/output_fabdem.tif").then((r) => r.arrayBuffer()),
     j("data/yala_waterways_osm.geojson"),
     j("data/yala_eastern_inflow.geojson"),
     j("data/yala_boundary.geojson"),
@@ -216,7 +216,7 @@
       let m = 1e9, any = 0;
       for (let dy = 0; dy < F; dy++) for (let dx = 0; dx < F; dx++) {
         const e = raw[(r * F + dy) * W0 + (c * F + dx)];
-        // เมืองยะลาอยู่สูง 14–80 ม.รทก. — ค่าติดลบ/ใกล้ 0 เป็น artifact ของ AW3D30 เหนือผิวน้ำ ตัดทิ้ง
+        // เมืองยะลาอยู่สูง 14–80 ม.รทก. — ค่าติดลบ/ใกล้ 0 เป็น artifact ของ DEM เหนือผิวน้ำ ตัดทิ้ง
         if (e > 0 && e < 9000 && isFinite(e)) { if (e < m) m = e; any = 1; }
       }
       const i = r * W + c;

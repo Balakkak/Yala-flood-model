@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-สร้าง terrain-RGB tiles (terrarium encoding) จาก DEM AW3D30 สำหรับ MapLibre setTerrain
+สร้าง terrain-RGB tiles (terrarium encoding) จาก DEM FABDEM สำหรับ MapLibre setTerrain
 → พื้นแต่ละพื้นที่มีความสูงจริง + ถนน/ตึกแปะตามภูมิประเทศ
 output: terrain/{z}/{x}/{y}.png  (zoom 12–16, เฉพาะเขตเมืองยะลา)
 """
@@ -11,7 +11,7 @@ from PIL import Image
 
 HERE   = os.path.dirname(os.path.abspath(__file__))
 ROOT   = os.path.normpath(os.path.join(HERE, ".."))
-DEMTIF = os.path.join(ROOT, "data", "output_AW3D30.tif")
+DEMTIF = os.path.join(ROOT, "data", "output_fabdem.tif")
 OUT    = os.path.join(ROOT, "terrain")
 
 dem = tifffile.imread(DEMTIF).astype(np.float64)     # (NR,NC) row0=เหนือ

@@ -6,7 +6,7 @@
 """
 import json, urllib.request, urllib.parse, os, sys
 
-# bbox เดียวกับ DEM AW3D30: [W,S,E,N] -> Overpass ใช้ (S,W,N,E)
+# bbox เดียวกับ DEM (FABDEM): [W,S,E,N] -> Overpass ใช้ (S,W,N,E)
 S, W, N, E = 6.40, 101.20, 6.70, 101.40
 QUERY = f"""
 [out:json][timeout:90];

@@ -10,7 +10,7 @@ import tifffile
 
 HERE   = os.path.dirname(os.path.abspath(__file__))
 ROOT   = os.path.normpath(os.path.join(HERE, ".."))
-DEMTIF = os.path.join(ROOT, "data", "output_AW3D30.tif")
+DEMTIF = os.path.join(ROOT, "data", "output_fabdem.tif")
 
 # --- อ่าน geotransform จาก tag ของ tif เอง → รองรับ DEM ความละเอียดใดก็ได้ (drop-in) ---
 with tifffile.TiffFile(DEMTIF) as tf:

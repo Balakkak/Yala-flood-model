@@ -42,7 +42,7 @@ assets/
   live_status.js               ดึงข้อมูลสด (เขื่อน/ฝน) + แคช last-known-good + ป้ายสถานะ header
   geotiff.min.js               ไลบรารีอ่าน GeoTIFF (vendored — เลี่ยงปัญหา CDN)
 data/                          ชั้นข้อมูลที่แดชบอร์ดเรียกใช้
-  output_AW3D30.tif            DEM (JAXA AW3D30, 30 ม.)
+  output_fabdem.tif            DEM (FABDEM V1-2, 30 ม., bare-earth · ตรวจ ICESat-2 ±5.45 ม.)
   yala_boundary.geojson        ขอบเขตเมือง (ใช้ทำ mask + คิดสถิติ)
   yala_waterways_osm.geojson   ทางน้ำจริงจาก OpenStreetMap (สร้างด้วย scripts/fetch_osm_waterways.py)
   yala_eastern_inflow.geojson  ต้นน้ำฝั่งตะวันออก (สะเตงนอก/บึงแบเมาะ — โดยประมาณ รอข้อมูลคลองจริง)
