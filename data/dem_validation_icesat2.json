@@ -1,0 +1,14 @@
+{
+  "reference": "ICESat-2 ATL08 (spaceborne LiDAR) via OpenAltimetry",
+  "dem": "FABDEM V1-2 (30 m, bare-earth)",
+  "n_points": 3924,
+  "tracks_used": [
+    "2024-01-01(RGT202)",
+    "2024-01-29(RGT644)"
+  ],
+  "datum_offset_m": -13.91,
+  "vertical_accuracy_std_m": 5.45,
+  "within_2m_pct": 47.0,
+  "note": "std ≈ ±5 ม. = ความแม่นแนวดิ่งระดับ 30 ม. — ยืนยันว่าต้องใช้ LiDAR (±0.15 ม.) ถึงจะทำความลึกน้ำท่วมแม่นได้",
+  "generated": "2026-06-16"
+}

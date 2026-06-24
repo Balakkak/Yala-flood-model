@@ -1,0 +1,40 @@
+<!DOCTYPE HTML>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>GISTDA sphere · ยะลา (ทดสอบ basemap)</title>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: 'Sarabun', sans-serif; }
+    #map { height: 100%; }
+    .note { position: absolute; top: 12px; left: 12px; z-index: 9; background: rgba(255,255,255,.95);
+      border: 1px solid #c7d2e0; border-radius: 10px; padding: 10px 13px; font-size: 12px; color: #334155;
+      box-shadow: 0 4px 16px rgba(15,38,73,.18); max-width: 280px; }
+    .note b { color: #0c3b6e; }
+    .note a { color: #0284c7; }
+  </style>
+
+  <!-- ⬇️ วาง API key ของคุณแทน [YOUR-KEY-API] -->
+  <script type="text/javascript" src="https://api.sphere.gistda.or.th/map/?key=[YOUR-KEY-API]"></script>
+  <script>
+    var map;
+    function init() {
+      map = new sphere.Map({
+        placeholder: document.getElementById('map'),
+        zoom: 14
+      });
+      // เปิดมาที่เมืองยะลา + ชั้นดาวเทียม GISTDA
+      try { map.Layers.setBase(sphere.Layers.IMAGES); } catch (e) {}      // ดาวเทียม (ถ้า method ต่างจากนี้ ปรับตาม doc)
+      try { map.location({ lon: 101.280, lat: 6.547 }, true); } catch (e) {}
+      try { map.zoom(14, true); } catch (e) {}
+    }
+  </script>
+</head>
+<body onload="init();">
+  <div class="note">
+    <b>ทดสอบ basemap GISTDA sphere · ยะลา</b><br>
+    ถ้าจอว่าง = ยังไม่ได้ใส่ API key — แก้ใน <code>&lt;script src=...key=<b>[YOUR-KEY-API]</b>&gt;</code><br>
+    สลับชั้น: ปุ่ม แผนที่/ดาวเทียม มุมขวาล่าง · <a href="index.html">← กลับแอปหลัก</a>
+  </div>
+  <div id="map"></div>
+</body>
+</html>

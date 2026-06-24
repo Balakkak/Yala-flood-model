@@ -1,0 +1,35 @@
+{
+  "_doc": "บันทึกเหตุการณ์น้ำท่วมจริง พ.ย. 2568 (ลุ่มน้ำปัตตานี: ยะลา-ปัตตานี) — ข้อมูลตรวจสอบ 'ด้านเวลา/ความลึก' (ลำดับ 2)",
+  "_use": "ใช้เทียบ timing (น้ำมาเมื่อไหร่/ลำดับ) และ depth (ลึกแค่ไหน) ที่โมเดลทำนาย vs ที่บันทึกจริง",
+  "event": "อุทกภัยภาคใต้ พ.ย. 2568",
+  "basin": "แม่น้ำปัตตานี (ยะลา = ต้นน้ำ/กลางน้ำ · ปัตตานี = ปลายน้ำ)",
+  "timeline": [
+    {"date": "2025-11-17", "phase": "ฝนเริ่มหนัก", "note": "มรสุม ตอน. + ฝนต่อเนื่อง · สทนช.เฝ้าระวัง 17–22 พ.ย.", "confidence": "high"},
+    {"date": "2025-11-23", "phase": "ฝนหนักสุด", "note": "เตือนน้ำท่วมฉับพลัน 23–25 พ.ย.", "confidence": "high"},
+    {"date": "2025-11-24", "phase": "แม่น้ำปัตตานีล้นตลิ่ง", "note": "มวลน้ำจากเหนือยะลาทะลักลงปัตตานี — onset น้ำท่วมเมือง", "confidence": "high"}
+  ],
+  "observed_depth": [
+    {"area": "เขตเทศบาลเมืองปัตตานี (ปลายน้ำ)", "depth_m": "0.4–0.5", "scope": "ถนนย่านเศรษฐกิจ", "confidence": "medium", "source": "thairath"},
+    {"area": "ถนนทั่วไป (ปลายน้ำ)", "depth_m": "≥0.3", "confidence": "medium", "source": "amarintv"},
+    {"area": "ชุมชน/หมู่บ้านลุ่มต่ำ", "depth_m": "2.0–3.0", "scope": "บางจุดถึง 4.0", "confidence": "medium", "source": "amarintv"}
+  ],
+  "impact": {"deaths_pattani": 5, "households_affected_pattani": 114000, "people_affected_pattani": 338000,
+             "note": "ตัวเลขผลกระทบเป็นของจังหวัดปัตตานี (ปลายน้ำ) — ยะลาเป็นต้นน้ำ"},
+  "model_anchors": {
+    "bankfull_onset": "river ≥ 75% (+14.00 ม.รทก) ตรงกับวันล้นตลิ่ง 24 พ.ย.",
+    "lead_time_rain_to_flood_days": 7,
+    "note": "ใช้ยืนยันว่า onset ของโมเดล (river 75%) สอดคล้องช่วงเวลาจริง · ความลึกยะลายังต้องการรอยน้ำเฉพาะจุด"
+  },
+  "gaps": [
+    "ยังขาด 'ความลึกเฉพาะจุดในเขตเทศบาลนครยะลา' (ตัวเลขข้างบนส่วนใหญ่เป็นปัตตานี ปลายน้ำ)",
+    "ยังขาด 'เวลาน้ำขึ้น-พีค-ลด รายชั่วโมง' → ต้องดึงจากโทรมาตร CDDP (scripts/fetch_cddp_telemetry.py)"
+  ],
+  "sources": [
+    "https://www.thairath.co.th/news/local/south/2897605",
+    "https://www.amarintv.com/news/social/531252",
+    "https://thestandard.co/south-flood-crisis-2025/",
+    "https://www.thansettakij.com/general-news/645046",
+    "https://th.wikipedia.org/wiki/อุทกภัยในประเทศไทยและประเทศมาเลเซีย_พ.ศ._2568"
+  ],
+  "generated": "2026-06-18"
+}

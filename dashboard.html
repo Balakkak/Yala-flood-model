@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ศูนย์เฝ้าระวังและจำลองน้ำท่วม · เทศบาลนครยะลา</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Leaflet + app styles -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Header ===== -->
+  <header class="app-header">
+    <div class="brand-mark"><i class="ti ti-ripple"></i></div>
+    <div class="brand-text">
+      <h1>ศูนย์เฝ้าระวังและจำลองน้ำท่วม เทศบาลนครยะลา</h1>
+      <p>YALA FLOOD GIS &middot; MONITORING &amp; SIMULATION DASHBOARD</p>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-meta">
+      <div class="view-toggle">
+        <a href="dashboard.html" class="active">🗺️ 2D</a>
+        <a href="index.html">🏙️ 3D</a>
+      </div>
+      <span class="chip">EPSG:32647 &middot; UTM 47N</span>
+      <span class="status-pill is-connecting"><span class="status-dot"></span> <span id="statusText">กำลังเชื่อมต่อ…</span></span>
+      <span class="header-clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <div class="app-main">
+
+    <!-- Map column -->
+    <div class="map-col">
+      <div class="map-wrap">
+        <div class="map-badge"><i class="ti ti-droplet-filled"></i> <span id="scenarioBadge">สถานการณ์: น้ำหลากจากแม่น้ำปัตตานี</span></div>
+        <div id="map"></div>
+        <button id="openSim" class="cta-sim"><i class="ti ti-droplet-filled" style="font-size:18px;"></i> จำลองสถานการณ์น้ำท่วม</button>
+        <div id="simFloat" class="sim-float is-hidden"></div>
+      </div>
+
+      <div class="timeline">
+        <button id="play" class="btn-play" aria-label="เล่น/หยุด">
+          <i class="ti ti-player-play" id="pico" style="font-size:16px;"></i><span id="ptxt">เล่นจำลองน้ำท่วม</span>
+        </button>
+        <button id="skipEnd" class="btn-skip-end" title="ข้ามไปผลสุดท้าย">
+          <i class="ti ti-player-skip-forward" style="font-size:16px;"></i>
+        </button>
+        <button id="drainBtn" class="btn-drain" title="จำลองน้ำลด — ดูทิศทางระบาย">
+          <i class="ti ti-trending-down" style="font-size:15px;"></i> น้ำลด
+        </button>
+        <div class="track">
+          <input type="range" id="sld" min="0" max="100" value="0" step="1" class="range-slider" />
+          <div class="track-ticks" id="trackTicks"><span>0 ชม.</span><span>6</span><span>12</span><span>18</span><span>24 ชม.</span></div>
+        </div>
+        <span id="tlab" class="time-label">ชม. 0</span>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+
+      <!-- Simulation Controls -->
+      <section class="card sim-card">
+        <div class="card-head">
+          <i class="ti ti-sliders"></i>
+          <h2>จำลองสถานการณ์น้ำท่วม</h2>
+          <span class="sub">Simulation</span>
+        </div>
+        <div class="card-body">
+          <p class="note" style="margin-bottom:14px;">ปรับค่าด้านล่างแล้วกด <b>เริ่มจำลอง</b> เพื่อดูพื้นที่เสี่ยงน้ำท่วมและวางแผนป้องกันล่วงหน้า</p>
+
+          <!-- Rainfall slider -->
+          <div class="sim-row">
+            <div class="sim-label-row">
+              <span class="sim-label-text"><i class="ti ti-cloud-rain" style="font-size:13px;color:#0284c7;"></i> ปริมาณฝน</span>
+              <span class="sim-cur-val"><span id="simRainfallVal">0</span><span class="sim-cur-unit"> mm/hr</span></span>
+            </div>
+            <div class="sim-track-wrap">
+              <input type="range" id="simRainfall" class="sim-slider" min="0" max="100" value="0" step="1" />
+              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .30)" data-warn="⚠ 30"></span>
+            </div>
+            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
+            <p class="sim-hint">≥ 30 mm/hr = เสี่ยงน้ำท่วมฉับพลัน</p>
+          </div>
+
+          <!-- River level slider -->
+          <div class="sim-row">
+            <div class="sim-label-row">
+              <span class="sim-label-text"><i class="ti ti-wave-sine" style="font-size:13px;color:#0284c7;"></i> ระดับน้ำแม่น้ำปัตตานี</span>
+              <span class="sim-cur-val"><span id="simRiverVal">50</span><span class="sim-cur-unit"> %</span></span>
+            </div>
+            <div class="sim-track-wrap">
+              <input type="range" id="simRiver" class="sim-slider" min="0" max="100" value="50" step="1" />
+              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .75)" data-warn="⚠ 75"></span>
+            </div>
+            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
+            <p class="sim-hint">≥ 75% = น้ำเอ่อล้นตลิ่ง (+14.00 ม.รทก.)</p>
+          </div>
+
+          <!-- Dam level slider -->
+          <div class="sim-row">
+            <div class="sim-label-row">
+              <span class="sim-label-text"><i class="ti ti-dam" style="font-size:13px;color:#0284c7;"></i> ระดับน้ำเขื่อนบางลาง</span>
+              <span class="sim-cur-val"><span id="simDamLevelVal">50</span><span class="sim-cur-unit"> %</span></span>
+            </div>
+            <div class="sim-track-wrap">
+              <input type="range" id="simDamLevel" class="sim-slider" min="0" max="100" value="50" step="1" />
+              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .90)" data-warn="⚠ 90"></span>
+            </div>
+            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
+            <p class="sim-hint">≥ 90% = เสี่ยงระบายฉุกเฉิน (+9 ชม. ถึงเมือง)</p>
+          </div>
+
+          <!-- Simulation duration -->
+          <div class="sim-row" style="margin-bottom:12px;">
+            <div class="sim-label-row" style="margin-bottom:7px;">
+              <span class="sim-label-text"><i class="ti ti-clock" style="font-size:13px;color:#0284c7;"></i> ระยะเวลาจำลอง</span>
+              <span style="font-size:11px;color:var(--ink-400);">ยิ่งนาน น้ำยิ่งแผ่กว้าง</span>
+            </div>
+            <div class="sim-duration-group" id="simDurationGroup">
+              <button class="btn-sim-duration active" data-hours="24">24 ชม.</button>
+              <button class="btn-sim-duration" data-hours="72">3 วัน</button>
+              <button class="btn-sim-duration" data-hours="168">7 วัน</button>
+            </div>
+          </div>
+
+          <!-- River level indicator -->
+          <div class="sim-river-box">
+            <div class="sim-river-head">
+              <span><i class="ti ti-wave-sine" style="font-size:12px;"></i> สถานะแม่น้ำปัตตานี</span>
+              <span id="simRiverLevel" class="sim-river-val">ต่ำ — ปลอดภัย (30%)</span>
+            </div>
+            <div class="sim-river-track">
+              <div id="simRiverBar" class="sim-river-fill" style="width:30%;"></div>
+            </div>
+          </div>
+
+          <!-- Rain zone drawing -->
+          <div class="sim-divider"></div>
+          <div class="sim-rain-header">
+            <span class="sim-label-text"><i class="ti ti-cloud-rain" style="font-size:13px;color:#1d4ed8;"></i> พื้นที่ฝนตกหนักเฉพาะจุด</span>
+            <div style="display:flex;gap:6px;">
+              <button id="simRainDrawToggle" class="btn-rain-draw">
+                <i class="ti ti-pencil" id="rainDrawIcon"></i> วาดบนแผนที่
+              </button>
+              <button id="simRainClearAll" class="btn-rain-clear" title="ล้างทั้งหมด">
+                <i class="ti ti-trash"></i>
+              </button>
+            </div>
+          </div>
+          <div class="sim-rain-opts">
+            <div class="sim-rain-opt-row">
+              <span class="sim-rain-opt-label">ความหนัก:</span>
+              <div class="sim-rain-multi-group" id="simRainMultiGroup">
+                <button class="btn-rain-opt active" data-mult="1.5">×1.5</button>
+                <button class="btn-rain-opt" data-mult="2">×2</button>
+                <button class="btn-rain-opt" data-mult="3">×3</button>
+              </div>
+            </div>
+            <div class="sim-rain-opt-row">
+              <span class="sim-rain-opt-label">รัศมี:</span>
+              <div class="sim-rain-multi-group" id="simRainRadiusGroup">
+                <button class="btn-rain-opt active" data-radius="1000">1 กม.</button>
+                <button class="btn-rain-opt" data-radius="2000">2 กม.</button>
+                <button class="btn-rain-opt" data-radius="3000">3 กม.</button>
+              </div>
+            </div>
+          </div>
+          <div id="simRainZoneStatus" class="sim-rain-status">ยังไม่มีพื้นที่กำหนด — กด "วาดบนแผนที่" แล้วคลิกบนแผนที่</div>
+          <ul id="simRainZoneList" class="sim-rain-zone-list"></ul>
+
+          <!-- คำตัดสันน้ำท่วม (การ์ดแบบเดียวกับหน้า 3D) -->
+          <div id="verdict" class="verdict v-safe"><i class="ti ti-shield-check"></i> <span id="vText">ยังไม่ท่วม</span></div>
+          <div class="stat" style="display:flex;justify-content:space-between;margin-top:9px;font-size:12px;color:var(--ink-500);">
+            <span>พื้นที่ท่วม <b id="anFloodArea" style="color:var(--ink-900);">0.0</b>%</span>
+            <span>ลึกทั่วไป <b id="anMaxDepth" style="color:var(--ink-900);">0.0</b> ม.</span>
+          </div>
+          <div id="vThr" class="vthr"></div>
+          <div class="sim-disclaimer">
+            <i class="ti ti-alert-triangle"></i>
+            <span>ผลเป็นระดับ <b>screening (เบื้องต้น)</b> บน DEM AW3D30 30 ม. (ความสูง ±5 ม.) — บอกลำดับท่วมก่อน-หลัง ทิศทางน้ำ และพื้นที่เสี่ยงได้ <b>ยังไม่ใช่การพยากรณ์ระดับน้ำเชิง hydrodynamic จริง</b> · ค่า % พื้นที่และความลึก calibrate กับเหตุการณ์ พ.ย. 2568</span>
+          </div>
+
+          <!-- Simulate button -->
+          <button id="simApplyBtn" class="btn-sim-apply">
+            <i class="ti ti-player-play" style="font-size:15px;"></i>
+            เริ่มจำลองสถานการณ์
+          </button>
+        </div>
+      </section>
+
+    </aside>
+  </div>
+</div>
+
+<!-- โมเดล 3D เมือง (ฝังผ่าน iframe — lazy load ตอนเปิด) -->
+<div id="modal3d" class="modal3d" hidden>
+  <div class="modal3d-inner">
+    <div class="modal3d-bar">
+      <span><i class="ti ti-building-skyscraper"></i> โมเดล 3D เมืองยะลา · น้ำท่วมบนเมือง</span>
+      <button id="close3d" class="modal3d-close" title="ปิด (Esc)"><i class="ti ti-x"></i></button>
+    </div>
+    <iframe id="frame3d" title="Yala 3D City"></iframe>
+  </div>
+</div>
+<script>
+  (function () {
+    var openBtn = document.getElementById('open3d'),
+        modal   = document.getElementById('modal3d'),
+        closeBtn= document.getElementById('close3d'),
+        frame   = document.getElementById('frame3d');
+    function open() {
+      modal.hidden = false; document.body.style.overflow = 'hidden';
+      if (!frame.src) frame.src = 'city3d.html';
+      // city3d.html มี ResizeObserver คอย map.resize() เมื่อ container ได้ขนาดจริง
+    }
+    function close() { modal.hidden = true; document.body.style.overflow = ''; }
+    if (openBtn) openBtn.onclick = open;
+    if (closeBtn) closeBtn.onclick = close;
+    modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) close(); });
+  })();
+</script>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- GeoTIFF reader (vendored locally) -->
+<script src="assets/geotiff.min.js"></script>
+<script>
+  // Live clock
+  (function () {
+    var el = document.getElementById('clock');
+    function tick() {
+      var d = new Date(), pad = n => String(n).padStart(2, '0');
+      el.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+    tick(); setInterval(tick, 1000);
+  })();
+
+  // 1. Initialize Map
+  var map = L.map('map', { zoomControl: true, scrollWheelZoom: true, dragging: true })
+    .setView([6.541, 101.280], 12);
+
+  var baseMap = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  var layerControl = L.control.layers({ "แผนที่หลัก (OSM)": baseMap }, {}).addTo(map);
+
+  // คงขนาดแผนที่ให้ถูกต้องเมื่อเป็น full-screen / ปรับขนาดหน้าต่าง
+  window.addEventListener('resize', () => map.invalidateSize());
+
+  // 2. City mask (inverted polygon) + lock view
+  fetch('data/yala_boundary.geojson')
+    .then(r => r.json())
+    .then(data => {
+      var coords = data.features[0].geometry.coordinates[0];
+      var innerRing = coords.map(c => [c[1], c[0]]);
+      var outerRing = [[-90, -360], [90, -360], [90, 360], [-90, 360], [-90, -360]];
+      // dim รอบนอกแบบโปร่งแสง (เห็นแผนที่จริงทะลุได้ ไม่เป็นพื้นที่ว่างสีขาว) + เส้นขอบเขตเมือง
+      map.invalidateSize();
+      var b = L.polygon(innerRing).getBounds();
+      // มุมมองเริ่มต้น = เห็นทั้งเมือง แล้วเปิดให้ผู้ใช้ซูม/เลื่อนได้อิสระ
+      // (overlay น้ำท่วมอ้างพิกัดจริง ซูม/เลื่อนได้โดยไม่หลุดตำแหน่ง) — ปุ่ม +/- มุมซ้ายบน
+      map.fitBounds(b);
+    });
+
+  // 3. OSM waterways (แม่น้ำปัตตานี + คลอง จาก OpenStreetMap — ข้อมูลจริง)
+  fetch('data/yala_waterways_osm.geojson')
+    .then(r => r.json())
+    .then(data => {
+      var styleByKind = function(kind) {
+        if (kind === 'river')  return { color: '#0369a1', weight: 5, opacity: 0.9 };
+        if (kind === 'canal')  return { color: '#0ea5e9', weight: 3, opacity: 0.85 };
+        if (kind === 'stream') return { color: '#38bdf8', weight: 2, opacity: 0.7 };
+        return { color: '#7dd3fc', weight: 2, opacity: 0.6 };
+      };
+      var layer = L.geoJSON(data, {
+        style: function(f) {
+          var geom = f.geometry;
+          if (geom.type === 'Polygon' || geom.type === 'MultiPolygon')
+            return { fillColor: '#bae6fd', fillOpacity: 0.4, stroke: false };
+          return styleByKind(f.properties.kind);
+        },
+        onEachFeature: function(f, l) {
+          var n = f.properties.name || f.properties.kind || 'ทางน้ำ';
+          l.bindPopup('<b>' + n + '</b><br>ประเภท: ' + (f.properties.kind || '-') + '<br>ที่มา: OpenStreetMap');
+        }
+      }).addTo(map);
+      layerControl.addOverlay(layer, "แม่น้ำ / คลอง (OSM)");
+    })
+    .catch(function() {});
+
+  // 3b. ท่อ/คูระบายน้ำเทศบาลนครยะลา (sewer & drain network)
+  fetch('data/yala_sewers.geojson')
+    .then(r => r.json())
+    .then(data => {
+      var kindStyle = function(kind, source) {
+        if (source === 'osm' && kind === 'canal') return { color: '#0891b2', weight: 2.5, opacity: 0.85, dashArray: '8 5' };
+        // DEM-derived drainage channels — show as gray-teal dashed lines
+        return { color: '#475569', weight: 1.5, opacity: 0.7, dashArray: '6 4' };
+      };
+      var layer = L.geoJSON(data, {
+        style: function(f) { return kindStyle(f.properties.kind, f.properties.source); },
+        onEachFeature: function(f, l) {
+          var name = f.properties.name || f.properties.label || 'ท่อ/คูระบายน้ำ';
+          l.bindPopup('<b>' + name + '</b><br>ประเภท: ' + f.properties.label + '<br>ที่มา: ' + (f.properties.source === 'osm' ? 'OpenStreetMap' : 'โครงข่ายระบายน้ำจาก DEM'));
+          l.bindTooltip(f.properties.label, { sticky: true, offset: [6, 0] });
+        }
+      });
+      layerControl.addOverlay(layer, "ท่อ/คูระบายน้ำ เทศบาล (Sewer Network)");
+    })
+    .catch(function() {});
+
+  // 3c. ฝาท่อ/ตะแกรงระบายน้ำ (9,262 จุด · เทศบาลนครยะลา) — canvas เพื่อความเร็ว
+  fetch('data/yala_drainage_manholes.geojson')
+    .then(r => r.json())
+    .then(data => {
+      var canvas = L.canvas({ padding: 0.5 });
+      var layer = L.geoJSON(data, {
+        pointToLayer: function(f, latlng) {
+          return L.circleMarker(latlng, { renderer: canvas, radius: 2.2,
+            weight: 0, fillColor: '#f59e0b', fillOpacity: 0.75 });
+        },
+        onEachFeature: function(f, l) {
+          var p = f.properties;
+          l.bindPopup('<b>ฝาท่อ/ตะแกรงระบายน้ำ</b><br>วัสดุ: ' + (p.material || '-') +
+            '<br>ขนาด: ' + (p.w || '?') + ' × ' + (p.l || '?') + ' ม. (' + (p.shape || '-') + ')');
+        }
+      });
+      layerControl.addOverlay(layer, "ฝาท่อ/ตะแกรงระบายน้ำ (9,262 จุด)");
+    })
+    .catch(function() {});
+
+  // 3d. สถานีสูบน้ำ (11 สถานี) — โครงสร้างป้องกันน้ำท่วมหลัก (เปิดโดยปริยาย)
+  fetch('data/yala_pump_stations.geojson')
+    .then(r => r.json())
+    .then(data => {
+      var layer = L.geoJSON(data, {
+        pointToLayer: function(f, latlng) {
+          return L.marker(latlng, { icon: L.divIcon({ className: 'pump-icon',
+            html: '<div class="pump-dot"><i class="ti ti-windmill"></i></div>', iconSize: [28, 28], iconAnchor: [14, 14] }) });
+        },
+        onEachFeature: function(f, l) {
+          var p = f.properties;
+          l.bindPopup('<b>' + (p.name || 'สถานีสูบน้ำ') + '</b>' +
+            '<br>เครื่องสูบ: <b>' + (p.pump_count || '-') + '</b> เครื่อง' + (p.pump_on != null ? ' (เปิด ' + p.pump_on + ')' : '') +
+            '<br>อัตราสูบรวม: <b>' + (p.flow_total != null ? p.flow_total : '-') + '</b> ลบ.ม./วิ' +
+            '<br>ประตูระบายน้ำ: ' + (p.gate_count || '-') +
+            '<br>ผู้ดูแล: ' + (p.contact || '-') +
+            '<br>ซ่อมบำรุงล่าสุด: ' + (p.maintained || '-'));
+          l.bindTooltip(p.name || 'สถานีสูบน้ำ', { sticky: true, direction: 'top', offset: [0, -10] });
+        }
+      }).addTo(map);
+      layerControl.addOverlay(layer, "สถานีสูบน้ำ (11 สถานี)");
+    })
+    .catch(function() {});
+
+  // 3e. ทางน้ำเทศบาล (polygon จริง · แม่น้ำ/คลอง 25 แปลง — รวมแม่น้ำปัตตานี กว้าง 170 ม.)
+  fetch('data/yala_waterways_kmz.geojson')
+    .then(r => r.json())
+    .then(data => {
+      var layer = L.geoJSON(data, {
+        style: { color: '#0369a1', weight: 1, fillColor: '#38bdf8', fillOpacity: 0.35 },
+        onEachFeature: function(f, l) {
+          var p = f.properties;
+          l.bindPopup('<b>' + (p.name || 'ทางน้ำ') + '</b><br>ประเภท: ' + (p.wtype || '-') +
+            '<br>กว้าง: ' + (p.width_m || '-') + ' ม. · ยาว: ' + (p.length_m || '-') + ' ม.<br>ที่มา: เทศบาลนครยะลา');
+        }
+      });
+      layerControl.addOverlay(layer, "ทางน้ำเทศบาล (แม่น้ำ/คลองจริง)");
+    })
+    .catch(function() {});
+
+  // 5a. ผล calibration เทียบเหตุการณ์จริง (scripts/calibrate_nov2568.py)
+  fetch('data/calibration_nov2568.json')
+    .then(r => r.json())
+    .then(d => {
+      var pod = document.getElementById('valPOD'), csi = document.getElementById('valCSI'),
+          pod2 = document.getElementById('valPOD2');
+      var podPct = d.POD != null ? Math.round(d.POD * 100) : null;
+      if (pod)  pod.textContent  = podPct != null ? podPct : '--';
+      if (pod2 && podPct != null) pod2.textContent = '~' + podPct;
+      if (csi)  csi.textContent  = d.CSI != null ? d.CSI.toFixed(2) : '--';
+    })
+    .catch(() => {});
+
+  // 5a-2. ผล validate DEM ด้วย LiDAR อวกาศ ICESat-2 (scripts/validate_dem_icesat2.py)
+  fetch('data/dem_validation_icesat2.json')
+    .then(r => r.json())
+    .then(d => {
+      var v = d.vertical_accuracy_std_m;
+      var set = function (id, t) { var e = document.getElementById(id); if (e) e.textContent = t; };
+      if (v != null) { set('valDEM', v.toFixed(1)); set('valDEM2', v.toFixed(2)); }
+      if (d.n_points != null) set('valDEMn', d.n_points.toLocaleString());
+    })
+    .catch(() => {});
+
+  // 5b. พื้นที่เสี่ยงน้ำท่วมจริงรายตำบล (GISTDA) — ชั้น validation เทียบกับผลโมเดล
+  //     flood_area_pct = % พื้นที่ตำบลที่ทับซ้อนกับพื้นที่น้ำท่วม GISTDA (ข้อมูลจริง)
+  fetch('data/yala_flood_recurrence.geojson')
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(data => {
+      var col = p => p >= 35 ? '#7f1d1d' : p >= 25 ? '#dc2626' : p >= 15 ? '#f97316' : p >= 5 ? '#fbbf24' : '#fde68a';
+      var layer = L.geoJSON(data, {
+        style: f => ({ stroke: true, color: '#b91c1c', weight: 0.6, fillColor: col(f.properties.flood_area_pct || 0), fillOpacity: 0.5 }),
+        onEachFeature: (f, l) => {
+          var p = f.properties;
+          l.bindPopup('<b>ต.' + (p.subdistrict || '') + '</b><br>'
+            + 'พื้นที่เสี่ยงน้ำท่วม (GISTDA): <b>' + (p.flood_area_pct || 0) + '%</b><br>'
+            + 'จุดหมู่บ้านเคยประสบอุทกภัย: ' + (p.flood_villages || 0) + ' จุด<br>'
+            + '<span style="font-size:11px;color:#64748b">พื้นที่ตำบล ' + (p.area_sqkm || 0) + ' ตร.กม.</span>');
+        }
+      });
+      layerControl.addOverlay(layer, "พื้นที่เสี่ยงน้ำท่วมจริง GISTDA รายตำบล (validation)");
+    })
+    .catch(err => console.warn('[flood_recurrence] โหลดชั้น validation ไม่สำเร็จ:', err.message));
+
+  // 5b-2. GISTDA flood event polygons (from KMZ/satellite) — lazy-loaded on first toggle
+  var gistdaEventLayer = L.geoJSON(null, {
+    style: function() { return { color: '#7c3aed', weight: 1.5, fillColor: '#a78bfa', fillOpacity: 0.35 }; },
+    onEachFeature: function(f, l) {
+      l.bindPopup('<b>เขตน้ำท่วม GISTDA</b><br>' + (f.properties.name || 'พื้นที่น้ำท่วม') + '<br><span style="color:#7c3aed;font-size:11px;">ที่มา: GISTDA ดาวเทียม</span>');
+    }
+  });
+  layerControl.addOverlay(gistdaEventLayer, "เขตน้ำท่วมจริง GISTDA (ดาวเทียม·เปิดครั้งแรกช้า)");
+  var _gistdaEvtLoaded = false;
+  map.on('overlayadd', function(e) {
+    if (e.layer === gistdaEventLayer && !_gistdaEvtLoaded) {
+      _gistdaEvtLoaded = true;
+      console.log('Loading GISTDA event data (~20MB)...');
+      fetch('data/yala_flood_gistda_kmz.geojson')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          (data.features || []).forEach(function(f) {
+            var geom = f.geometry;
+            if (!geom) return;
+            if (geom.type === 'GeometryCollection') {
+              geom.geometries.forEach(function(g) {
+                if (g.type === 'Polygon' || g.type === 'MultiPolygon')
+                  gistdaEventLayer.addData({ type: 'Feature', geometry: g, properties: f.properties });
+              });
+            } else {
+              gistdaEventLayer.addData(f);
+            }
+          });
+          console.log('✅ GISTDA event layer loaded');
+        })
+        .catch(function(e) { console.warn('GISTDA event load failed', e); });
+    }
+  });
+
+  // 5c. Tambon boundaries (ตำบลอำเภอเมืองยะลา) — บริบทต้นน้ำ
+  fetch('data/yala_tambons.geojson')
+    .then(r => r.json())
+    .then(data => {
+      var layer = L.geoJSON(data, {
+        style: { color: '#6366f1', weight: 1.5, fill: false, dashArray: '4 3' },
+        onEachFeature: (f, l) => l.bindTooltip(f.properties.adm3_name1 || '', { sticky: true })
+      });
+      layerControl.addOverlay(layer, "ขอบเขตตำบล (อ.เมืองยะลา)");
+    })
+    .catch(() => {});
+
+  // 5d. แม่น้ำหลัก (ตรวจสอบ) + แอนิเมชันทิศทางการไหล
+  fetch('data/yala_major_river_validated.geojson')
+    .then(r => r.json())
+    .then(data => {
+      // แยก LineStrings จาก GeometryCollection
+      var lineFeatures = [];
+      data.features.forEach(function(feat) {
+        var geom = feat.geometry;
+        if (geom.type === 'GeometryCollection') {
+          geom.geometries.forEach(function(g) {
+            if (g.type === 'LineString' && g.coordinates.length >= 2)
+              lineFeatures.push({ type: 'Feature', geometry: g, properties: feat.properties });
+          });
+        } else if (geom.type === 'LineString') {
+          lineFeatures.push(feat);
+        }
+      });
+      var fc = { type: 'FeatureCollection', features: lineFeatures };
+
+      // ชั้นแม่น้ำทึบ
+      var riverBase = L.geoJSON(fc, {
+        style: { color: '#0369a1', weight: 5, opacity: 0.85 },
+        onEachFeature: function(f, l) {
+          l.bindPopup('<b>' + (f.properties.name || 'แม่น้ำหลัก') + '</b><br>แม่น้ำหลัก — ข้อมูลกรมทรัพยากรน้ำ');
+        }
+      });
+
+      // ชั้นแอนิเมชัน (เส้นประไหล — แสดงทิศทางน้ำ)
+      var riverAnim = L.geoJSON(fc, {
+        style: { color: '#7dd3fc', weight: 3, opacity: 0.9, className: 'river-flow-anim' },
+        interactive: false
+      });
+
+      var riverGroup = L.layerGroup([riverBase, riverAnim]).addTo(map);
+      layerControl.addOverlay(riverGroup, "แม่น้ำหลัก (ตรวจสอบ · ทิศทางน้ำ)");
+    })
+    .catch(function() {});
+
+  // 5e. หมู่บ้านเสี่ยงน้ำท่วม (ข้อมูลกรมน้ำ)
+  fetch('data/yala_flood_villages.geojson')
+    .then(r => r.json())
+    .then(data => {
+      var icon = L.divIcon({
+        className: '', iconSize: [10, 10], iconAnchor: [5, 5],
+        html: '<div class="village-risk-dot"></div>'
+      });
+      var layer = L.geoJSON(data, {
+        pointToLayer: function(f, ll) { return L.marker(ll, { icon: icon }); },
+        onEachFeature: function(f, l) {
+          var name = f.properties.name || 'หมู่บ้าน';
+          l.bindPopup('<b>' + name + '</b><br><span style="color:#dc2626;font-weight:600">เสี่ยงน้ำท่วม</span>');
+          l.bindTooltip(name, { sticky: true, offset: [8, 0] });
+        }
+      });
+      layerControl.addOverlay(layer, "หมู่บ้านเสี่ยงน้ำท่วม (กรมน้ำ)");
+    })
+    .catch(function() {});
+
+  // 5f. จุดต้นน้ำ — ทิศทางน้ำเข้าเมือง (permanent markers)
+  var entryPoints = [
+    { lat: 6.605, lon: 101.250, arrow: '↘', label: 'แม่น้ำปัตตานี\nเอ่อ (ตะวันตก-เหนือ)' },
+    { lat: 6.625, lon: 101.300, arrow: '↙', label: 'คลองยะลา / อ่างเก็บน้ำ\n(ตะวันออกเฉียงเหนือ)' },
+    { lat: 6.540, lon: 101.355, arrow: '←', label: 'สะเตงนอก / บึงแบเมาะ\n(ตะวันออก)' }
+  ];
+  entryPoints.forEach(function(ep) {
+    var icon = L.divIcon({
+      className: '', iconSize: [130, 40], iconAnchor: [65, 20],
+      html: '<div class="entry-marker"><span class="em-arrow">' + ep.arrow + '</span><span class="em-label">' + ep.label.replace('\n','<br>') + '</span></div>'
+    });
+    L.marker([ep.lat, ep.lon], { icon: icon, interactive: false, zIndexOffset: 900 }).addTo(map);
+  });
+
+  // 6. DEM hillshade (GeoTIFF v2 async API)
+  console.log("Loading DEM...");
+  fetch('data/output_AW3D30.tif')
+    .then(res => res.arrayBuffer())
+    .then(buffer => GeoTIFF.fromArrayBuffer(buffer).then(tiff => tiff.getImage()))
+    .then(image => {
+      const width = image.getWidth(), height = image.getHeight(), bbox = image.getBoundingBox();
+      console.log(`DEM: ${width}×${height}, bbox:`, bbox);
+      return image.readRasters({ interleave: false }).then(rasters => {
+        const dem = rasters[0];
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(width, height);
+        const d = imageData.data;
+        let mn = Infinity, mx = -Infinity;
+        for (let i = 0; i < dem.length; i++) { const e = dem[i]; if (e > -1000 && e < 9000 && isFinite(e)) { if (e < mn) mn = e; if (e > mx) mx = e; } }
+        for (let i = 0; i < width * height; i++) {
+          const norm = (dem[i] - mn) / (mx - mn);
+          const b = Math.max(0, Math.min(255, norm * 200 + 55));
+          d[i * 4] = b; d[i * 4 + 1] = b; d[i * 4 + 2] = b; d[i * 4 + 3] = 200;
+        }
+        ctx.putImageData(imageData, 0, 0);
+        const demLayer = L.imageOverlay(canvas.toDataURL(),
+          [[bbox[1], bbox[0]], [bbox[3], bbox[2]]], { opacity: 0.5, attribution: 'DEM: JAXA AW3D30' });
+        layerControl.addOverlay(demLayer, "ภูมิศาสตร์ (DEM hillshade)");
+        console.log("✅ DEM hillshade layer added");
+      });
+    })
+    .catch(err => console.warn("⚠️ DEM hillshade issue:", err));
+</script>
+
+<!-- ตัววิเคราะห์การแพร่ของน้ำท่วมจาก DEM จริง (Priority-Flood) -->
+<script src="assets/live_status.js"></script>
+<script src="assets/flood_analysis.js"></script>
+
+<!-- โหมด viewer ผลจำลอง LISFLOOD-FP 2D (เงียบถ้ายังไม่ได้รันโมเดล) -->
+<script src="assets/lisflood_viewer.js"></script>
+
+<!-- ตรวจสถานะข้อมูลสด (เขื่อน/ฝน) ตอนเปิดหน้า → ตั้งป้าย header ออนไลน์/แคช/ออฟไลน์ -->
+<script>if (window.YalaLive) YalaLive.fetchLive();</script>
+
+<!-- ย้ายแผงจำลองมาลอยเหนือแผนที่ + ปุ่มกดแล้วเลื่อนขึ้น (เหมือนหน้า 3D) -->
+<script>
+  (function () {
+    var card = document.querySelector('.sim-card'),
+        floatBox = document.getElementById('simFloat'),
+        cta = document.getElementById('openSim');
+    if (!card || !floatBox || !cta) return;
+    floatBox.appendChild(card);              // ย้ายการ์ดจาก sidebar มาลอยเหนือแผนที่
+    var aside = document.querySelector('.sidebar');
+    if (aside) aside.style.display = 'none'; // ซ่อนแถบขวาที่ว่าง → แผนที่เต็มจอ (เหมือน 3D)
+    try { if (typeof map !== 'undefined') setTimeout(function () { map.invalidateSize(); }, 60); } catch (e) {}
+    var head = card.querySelector('.card-head');
+    if (head && !head.querySelector('.panel-close')) {
+      head.style.position = 'relative'; head.style.paddingRight = '40px';
+      var x = document.createElement('button');
+      x.className = 'panel-close'; x.title = 'ปิด'; x.setAttribute('aria-label', 'ปิดแผง');
+      x.innerHTML = '<i class="ti ti-x"></i>';
+      x.onclick = close;
+      head.appendChild(x);
+    }
+    function open()  { floatBox.classList.remove('is-hidden'); cta.classList.add('is-hidden'); }
+    function close() { floatBox.classList.add('is-hidden');  cta.classList.remove('is-hidden'); }
+    cta.onclick = open;
+    // ย้ายเครดิตแผนที่ไปซ้ายล่าง กันชนปุ่ม CTA (เหมือนหน้า 3D)
+    try { if (typeof map !== 'undefined' && map.attributionControl) map.attributionControl.setPosition('bottomleft'); } catch (e) {}
+  })();
+</script>
+
+</body>
+</html>

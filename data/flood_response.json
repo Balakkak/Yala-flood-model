@@ -1,0 +1,293 @@
+{
+  "_doc": "เส้นโค้งตอบสนองน้ำท่วม + เกณฑ์เริ่มท่วม (scripts/flood_response.py)",
+  "method": "Priority-Flood บน DEM FABDEM 30 ม. · ผูกเกณฑ์กายภาพ (ตลิ่ง +14 ม.รทก, เหตุการณ์ พ.ย.2568)",
+  "base_stage_m": 14.0,
+  "onset_stage_m": 15.25,
+  "onset_rise_m": 1.25,
+  "event_stage_m": 18.25,
+  "event_rise_m": 4.25,
+  "mapping": {
+    "river_bankfull_pct": 75.0,
+    "river_extra_m": 2.34,
+    "rain_max_m": 0.9,
+    "dam_max_m": 0.66,
+    "dam_onset_pct": 70.0,
+    "normal_baseline": {
+      "river": 50,
+      "rain": 0,
+      "dam": 60
+    }
+  },
+  "onset_thresholds": {
+    "river_pct": 75.0,
+    "rain_mmhr": 40.5,
+    "dam_pct": 89.0
+  },
+  "curve": [
+    {
+      "stage": 14.0,
+      "above_base": 0.0,
+      "area_pct": 1.2,
+      "land_pct": 0.0,
+      "depth_median": 0.0,
+      "depth_p95": 0.0
+    },
+    {
+      "stage": 14.25,
+      "above_base": 0.25,
+      "area_pct": 3.5,
+      "land_pct": 0.0,
+      "depth_median": 0.0,
+      "depth_p95": 0.0
+    },
+    {
+      "stage": 14.5,
+      "above_base": 0.5,
+      "area_pct": 3.5,
+      "land_pct": 0.0,
+      "depth_median": 0.0,
+      "depth_p95": 0.0
+    },
+    {
+      "stage": 14.75,
+      "above_base": 0.75,
+      "area_pct": 3.5,
+      "land_pct": 0.0,
+      "depth_median": 0.0,
+      "depth_p95": 0.0
+    },
+    {
+      "stage": 15.0,
+      "above_base": 1.0,
+      "area_pct": 3.5,
+      "land_pct": 0.0,
+      "depth_median": 0.0,
+      "depth_p95": 0.0
+    },
+    {
+      "stage": 15.25,
+      "above_base": 1.25,
+      "area_pct": 6.5,
+      "land_pct": 3.0,
+      "depth_median": 0.25,
+      "depth_p95": 0.25
+    },
+    {
+      "stage": 15.5,
+      "above_base": 1.5,
+      "area_pct": 6.7,
+      "land_pct": 3.2,
+      "depth_median": 0.5,
+      "depth_p95": 0.5
+    },
+    {
+      "stage": 15.75,
+      "above_base": 1.75,
+      "area_pct": 6.7,
+      "land_pct": 3.2,
+      "depth_median": 0.75,
+      "depth_p95": 0.75
+    },
+    {
+      "stage": 16.0,
+      "above_base": 2.0,
+      "area_pct": 7.0,
+      "land_pct": 3.5,
+      "depth_median": 1.0,
+      "depth_p95": 1.0
+    },
+    {
+      "stage": 16.25,
+      "above_base": 2.25,
+      "area_pct": 11.8,
+      "land_pct": 8.4,
+      "depth_median": 0.25,
+      "depth_p95": 1.25
+    },
+    {
+      "stage": 16.5,
+      "above_base": 2.5,
+      "area_pct": 12.2,
+      "land_pct": 8.7,
+      "depth_median": 0.5,
+      "depth_p95": 1.5
+    },
+    {
+      "stage": 16.75,
+      "above_base": 2.75,
+      "area_pct": 12.2,
+      "land_pct": 8.7,
+      "depth_median": 0.75,
+      "depth_p95": 1.75
+    },
+    {
+      "stage": 17.0,
+      "above_base": 3.0,
+      "area_pct": 12.3,
+      "land_pct": 8.8,
+      "depth_median": 1.0,
+      "depth_p95": 2.0
+    },
+    {
+      "stage": 17.25,
+      "above_base": 3.25,
+      "area_pct": 17.2,
+      "land_pct": 13.7,
+      "depth_median": 1.25,
+      "depth_p95": 2.25
+    },
+    {
+      "stage": 17.5,
+      "above_base": 3.5,
+      "area_pct": 17.6,
+      "land_pct": 14.1,
+      "depth_median": 1.5,
+      "depth_p95": 2.5
+    },
+    {
+      "stage": 17.75,
+      "above_base": 3.75,
+      "area_pct": 17.6,
+      "land_pct": 14.1,
+      "depth_median": 1.75,
+      "depth_p95": 2.75
+    },
+    {
+      "stage": 18.0,
+      "above_base": 4.0,
+      "area_pct": 22.0,
+      "land_pct": 18.5,
+      "depth_median": 1.91,
+      "depth_p95": 3.0
+    },
+    {
+      "stage": 18.25,
+      "above_base": 4.25,
+      "area_pct": 32.5,
+      "land_pct": 29.0,
+      "depth_median": 1.25,
+      "depth_p95": 3.25
+    },
+    {
+      "stage": 18.5,
+      "above_base": 4.5,
+      "area_pct": 33.3,
+      "land_pct": 29.8,
+      "depth_median": 1.5,
+      "depth_p95": 3.5
+    },
+    {
+      "stage": 18.75,
+      "above_base": 4.75,
+      "area_pct": 33.3,
+      "land_pct": 29.8,
+      "depth_median": 1.75,
+      "depth_p95": 3.75
+    },
+    {
+      "stage": 19.0,
+      "above_base": 5.0,
+      "area_pct": 33.4,
+      "land_pct": 29.9,
+      "depth_median": 2.0,
+      "depth_p95": 4.0
+    },
+    {
+      "stage": 19.25,
+      "above_base": 5.25,
+      "area_pct": 41.7,
+      "land_pct": 38.2,
+      "depth_median": 1.25,
+      "depth_p95": 4.25
+    },
+    {
+      "stage": 19.5,
+      "above_base": 5.5,
+      "area_pct": 42.5,
+      "land_pct": 39.0,
+      "depth_median": 1.5,
+      "depth_p95": 4.5
+    },
+    {
+      "stage": 19.75,
+      "above_base": 5.75,
+      "area_pct": 42.5,
+      "land_pct": 39.0,
+      "depth_median": 1.75,
+      "depth_p95": 4.75
+    },
+    {
+      "stage": 20.0,
+      "above_base": 6.0,
+      "area_pct": 42.6,
+      "land_pct": 39.1,
+      "depth_median": 2.0,
+      "depth_p95": 5.0
+    },
+    {
+      "stage": 20.25,
+      "above_base": 6.25,
+      "area_pct": 49.8,
+      "land_pct": 46.3,
+      "depth_median": 2.25,
+      "depth_p95": 5.25
+    },
+    {
+      "stage": 20.5,
+      "above_base": 6.5,
+      "area_pct": 51.0,
+      "land_pct": 47.5,
+      "depth_median": 2.5,
+      "depth_p95": 5.5
+    },
+    {
+      "stage": 20.75,
+      "above_base": 6.75,
+      "area_pct": 51.0,
+      "land_pct": 47.5,
+      "depth_median": 2.75,
+      "depth_p95": 5.75
+    },
+    {
+      "stage": 21.0,
+      "above_base": 7.0,
+      "area_pct": 51.4,
+      "land_pct": 47.9,
+      "depth_median": 3.0,
+      "depth_p95": 6.0
+    },
+    {
+      "stage": 21.25,
+      "above_base": 7.25,
+      "area_pct": 56.8,
+      "land_pct": 53.3,
+      "depth_median": 3.25,
+      "depth_p95": 6.25
+    },
+    {
+      "stage": 21.5,
+      "above_base": 7.5,
+      "area_pct": 57.4,
+      "land_pct": 53.9,
+      "depth_median": 3.5,
+      "depth_p95": 6.5
+    },
+    {
+      "stage": 21.75,
+      "above_base": 7.75,
+      "area_pct": 57.4,
+      "land_pct": 53.9,
+      "depth_median": 3.75,
+      "depth_p95": 6.75
+    },
+    {
+      "stage": 22.0,
+      "above_base": 8.0,
+      "area_pct": 57.4,
+      "land_pct": 53.9,
+      "depth_median": 4.0,
+      "depth_p95": 7.0
+    }
+  ],
+  "generated": "2026-06-17"
+}

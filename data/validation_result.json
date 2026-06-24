@@ -1,0 +1,9 @@
+{
+  "ground_truth": "GISTDA recurrent flood 2011–2023",
+  "city_cells": 6545,
+  "gistda_coverage_pct": 9.4,
+  "auc_freq3": 0.835,
+  "auc_any": 0.768,
+  "spearman": -0.276,
+  "generated": "2026-06-11"
+}
