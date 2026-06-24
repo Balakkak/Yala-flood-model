@@ -127,6 +127,16 @@ body {
   border-left: 1px solid rgba(148, 197, 240, .25);
   font-variant-numeric: tabular-nums;
 }
+/* ปุ่มออกจากระบบ (กลมกลืนกับ header แบบ glass) */
+.logout-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px;
+  background: rgba(148, 197, 240, .12); border: 1px solid rgba(148, 197, 240, .28);
+  color: #cfe7fb; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: all .15s;
+}
+.logout-btn:hover { background: rgba(239, 68, 68, .22); border-color: rgba(248, 113, 113, .55); color: #fecaca; }
+.logout-btn .ti { font-size: 15px; }
 
 /* ---------- Main row ---------- */
 .app-main { flex: 1; display: flex; min-height: 0; }

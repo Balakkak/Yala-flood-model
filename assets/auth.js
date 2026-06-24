@@ -12,7 +12,20 @@
 (function () {
   try {
     if (window.top !== window.self) return;               // embedded → parent guards
-    if (sessionStorage.getItem("yala_auth") === "1") return;
+    if (sessionStorage.getItem("yala_auth") === "1") { wireLogout(); return; }
   } catch (e) { /* sandboxed iframe ฯลฯ */ return; }
   location.replace("login.html");
+
+  function wireLogout() {
+    function bind() {
+      var btn = document.getElementById("logoutBtn");
+      if (!btn) return;
+      btn.addEventListener("click", function () {
+        try { sessionStorage.removeItem("yala_auth"); } catch (e) {}
+        location.replace("login.html");
+      });
+    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+    else bind();
+  }
 })();
