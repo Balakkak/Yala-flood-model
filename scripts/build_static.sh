@@ -21,7 +21,7 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 
 # 1) หน้าเว็บ (entry pages)
-cp index.html dashboard.html city3d.html interventions.html "$OUT"/
+cp index.html dashboard.html city3d.html interventions.html login.html "$OUT"/
 
 # 2) โค้ด/สไตล์ที่หน้าเว็บเรียกใช้
 cp -R assets "$OUT"/

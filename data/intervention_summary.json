@@ -6,76 +6,148 @@
     "protects_buildings": 94,
     "before": 207,
     "after": 113,
-    "area_rai": 453,
-    "needs_pump": true
+    "needs_pump": true,
+    "cost_thb": 169700000
   },
+  "cost_note": "ต้นทุนเป็นค่าสมมุติคร่าว ๆ (คันกั้น 30,000 ฿/ม. · สูบ 5 ล้าน฿ · ท่อ 2 ล้าน฿ · บ่อหน่วง 1,200 ฿/ลบ.ม.) ใช้จัดลำดับ benefit/cost เท่านั้น ไม่ใช่ราคาจริง",
   "recommendations": [
     {
-      "priority": 1,
+      "type": "แก้มลิง/บ่อหน่วงน้ำ (retention)",
+      "kind": "retention",
+      "where": "6.525, 101.275",
+      "storage_m3": 12600,
+      "area_rai": 4,
+      "measure": "บ่อหน่วงน้ำ ~4 ไร่ ที่จุดน้ำไหลมารวมหลัก",
+      "protects_buildings": null,
+      "cost_thb": 15120000,
+      "benefit_per_million": 12.96,
+      "expected": "หน่วงน้ำ ~12,600 ลบ.ม. ลดยอดน้ำท่วมท้ายน้ำ (ปริมาตรจริงต้อง SWMM)",
+      "priority": 1
+    },
+    {
+      "type": "แก้มลิง/บ่อหน่วงน้ำ (retention)",
+      "kind": "retention",
+      "where": "6.526, 101.276",
+      "storage_m3": 14400,
+      "area_rai": 4,
+      "measure": "บ่อหน่วงน้ำ ~4 ไร่ ที่จุดน้ำไหลมารวมหลัก",
+      "protects_buildings": null,
+      "cost_thb": 17280000,
+      "benefit_per_million": 11.63,
+      "expected": "หน่วงน้ำ ~14,400 ลบ.ม. ลดยอดน้ำท่วมท้ายน้ำ (ปริมาตรจริงต้อง SWMM)",
+      "priority": 2
+    },
+    {
+      "type": "แก้มลิง/บ่อหน่วงน้ำ (retention)",
+      "kind": "retention",
+      "where": "6.526, 101.277",
+      "storage_m3": 19800,
+      "area_rai": 6,
+      "measure": "บ่อหน่วงน้ำ ~6 ไร่ ที่จุดน้ำไหลมารวมหลัก",
+      "protects_buildings": null,
+      "cost_thb": 23760000,
+      "benefit_per_million": 7.07,
+      "expected": "หน่วงน้ำ ~19,800 ลบ.ม. ลดยอดน้ำท่วมท้ายน้ำ (ปริมาตรจริงต้อง SWMM)",
+      "priority": 3
+    },
+    {
       "type": "พื้นที่เสี่ยง (hotspot)",
-      "where": "ละติจูด 6.563, ลองจิจูด 101.301",
+      "kind": "hotspot",
+      "where": "6.563, 101.301",
       "buildings": 207,
       "depth_mean_m": 0.75,
-      "measure": "คันกั้นน้ำรอบพื้นที่ + สถานีสูบ / ยกระดับถนนรอบนอก",
-      "expected": "ป้องกันอาคารได้สูงสุด ~207 หลัง"
+      "measure": "คันกั้นน้ำรอบพื้นที่ + สถานีสูบ / ยกถนนรอบนอก",
+      "protects_buildings": 94,
+      "cost_thb": 169700000,
+      "benefit_per_million": 0.55,
+      "expected": "ป้องกันอาคารได้ ~94 หลัง (จากที่ท่วม 207)",
+      "priority": 4
     },
     {
-      "priority": 2,
       "type": "พื้นที่เสี่ยง (hotspot)",
-      "where": "ละติจูด 6.567, ลองจิจูด 101.288",
+      "kind": "hotspot",
+      "where": "6.567, 101.288",
       "buildings": 10,
       "depth_mean_m": 1.01,
-      "measure": "คันกั้นน้ำรอบพื้นที่ + สถานีสูบ / ยกระดับถนนรอบนอก",
-      "expected": "ป้องกันอาคารได้สูงสุด ~10 หลัง"
+      "measure": "คันกั้นน้ำรอบพื้นที่ / ยกถนนรอบนอก",
+      "protects_buildings": 10,
+      "cost_thb": 71100000,
+      "benefit_per_million": 0.14,
+      "expected": "ป้องกันอาคารได้ ~10 หลัง (จากที่ท่วม 10)",
+      "priority": 5
     },
     {
-      "priority": 3,
       "type": "พื้นที่เสี่ยง (hotspot)",
-      "where": "ละติจูด 6.559, ลองจิจูด 101.275",
+      "kind": "hotspot",
+      "where": "6.559, 101.275",
       "buildings": 8,
       "depth_mean_m": 0.98,
-      "measure": "คันกั้นน้ำรอบพื้นที่ + สถานีสูบ / ยกระดับถนนรอบนอก",
-      "expected": "ป้องกันอาคารได้สูงสุด ~8 หลัง"
+      "measure": "คันกั้นน้ำรอบพื้นที่ / ยกถนนรอบนอก",
+      "protects_buildings": 7,
+      "cost_thb": 572400000,
+      "benefit_per_million": 0.01,
+      "expected": "ป้องกันอาคารได้ ~7 หลัง (จากที่ท่วม 8)",
+      "priority": 6
     },
     {
-      "priority": 4,
       "type": "คอขวดระบายน้ำ (bottleneck)",
-      "where": "ละติจูด 6.527, ลองจิจูด 101.278",
+      "kind": "bottleneck",
+      "where": "6.527, 101.278",
       "drain_cm": 0,
       "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
-      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"
+      "protects_buildings": null,
+      "cost_thb": 2000000,
+      "benefit_per_million": null,
+      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม",
+      "priority": 7
     },
     {
-      "priority": 5,
       "type": "คอขวดระบายน้ำ (bottleneck)",
-      "where": "ละติจูด 6.527, ลองจิจูด 101.275",
+      "kind": "bottleneck",
+      "where": "6.527, 101.275",
       "drain_cm": 4,
       "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
-      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"
+      "protects_buildings": null,
+      "cost_thb": 2000000,
+      "benefit_per_million": null,
+      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม",
+      "priority": 8
     },
     {
-      "priority": 6,
       "type": "คอขวดระบายน้ำ (bottleneck)",
-      "where": "ละติจูด 6.526, ลองจิจูด 101.275",
+      "kind": "bottleneck",
+      "where": "6.526, 101.275",
       "drain_cm": 4,
       "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
-      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"
+      "protects_buildings": null,
+      "cost_thb": 2000000,
+      "benefit_per_million": null,
+      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม",
+      "priority": 9
     },
     {
-      "priority": 7,
       "type": "คอขวดระบายน้ำ (bottleneck)",
-      "where": "ละติจูด 6.526, ลองจิจูด 101.276",
+      "kind": "bottleneck",
+      "where": "6.526, 101.276",
       "drain_cm": 0,
       "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
-      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"
+      "protects_buildings": null,
+      "cost_thb": 2000000,
+      "benefit_per_million": null,
+      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม",
+      "priority": 10
     },
     {
-      "priority": 8,
       "type": "คอขวดระบายน้ำ (bottleneck)",
-      "where": "ละติจูด 6.547, ลองจิจูด 101.271",
+      "kind": "bottleneck",
+      "where": "6.547, 101.271",
       "drain_cm": 0,
       "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
-      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"
+      "protects_buildings": null,
+      "cost_thb": 2000000,
+      "benefit_per_million": null,
+      "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม",
+      "priority": 11
     }
   ],
   "method_note": "ระดับ screening บน Priority-Flood (DEM FABDEM 30 ม., ±5 ม.) — ใช้เลือกจุด/เทียบมาตรการ ไม่ใช่ออกแบบขนาดจริง (ต้อง HEC-RAS 2D + SWMM + LiDAR)",
