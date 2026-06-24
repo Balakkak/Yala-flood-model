@@ -1,0 +1,579 @@
+{
+  "ground_truth": "GISTDA satellite flood extent (เหตุการณ์ใหญ่ พื้นที่ยะลา)",
+  "method": "connectivity-flood (Priority-Flood) บน AW3D30 30 ม.",
+  "calibrated_stage_m": 18.25,
+  "stage_above_base_m": 4.25,
+  "CSI": 0.179,
+  "POD": 0.489,
+  "FAR": 0.78,
+  "bias": 2.22,
+  "pred_flood_pct": 29.8,
+  "observed_flood_pct": 13.4,
+  "depth_median_m": 1.25,
+  "depth_p95_m": 3.25,
+  "aar_reference_depth_m": "0.8-1.0",
+  "note": "screening บน DEM 30 ม. — ความแม่นเท่าที่ข้อมูลปัจจุบันทำได้; ได้ LiDAR จะแม่นขึ้นมาก",
+  "stage_sweep": [
+    {
+      "stage": 14.5,
+      "CSI": 0.0,
+      "POD": 0.0,
+      "FAR": 0,
+      "bias": 0.0,
+      "pred_pct": 0.0
+    },
+    {
+      "stage": 14.75,
+      "CSI": 0.0,
+      "POD": 0.0,
+      "FAR": 0,
+      "bias": 0.0,
+      "pred_pct": 0.0
+    },
+    {
+      "stage": 15.0,
+      "CSI": 0.0,
+      "POD": 0.0,
+      "FAR": 0,
+      "bias": 0.0,
+      "pred_pct": 0.0
+    },
+    {
+      "stage": 15.25,
+      "CSI": 0.052,
+      "POD": 0.061,
+      "FAR": 0.744,
+      "bias": 0.24,
+      "pred_pct": 3.2
+    },
+    {
+      "stage": 15.5,
+      "CSI": 0.052,
+      "POD": 0.061,
+      "FAR": 0.744,
+      "bias": 0.24,
+      "pred_pct": 3.2
+    },
+    {
+      "stage": 15.75,
+      "CSI": 0.052,
+      "POD": 0.061,
+      "FAR": 0.744,
+      "bias": 0.24,
+      "pred_pct": 3.2
+    },
+    {
+      "stage": 16.0,
+      "CSI": 0.063,
+      "POD": 0.075,
+      "FAR": 0.716,
+      "bias": 0.26,
+      "pred_pct": 3.5
+    },
+    {
+      "stage": 16.25,
+      "CSI": 0.097,
+      "POD": 0.146,
+      "FAR": 0.775,
+      "bias": 0.65,
+      "pred_pct": 8.7
+    },
+    {
+      "stage": 16.5,
+      "CSI": 0.097,
+      "POD": 0.146,
+      "FAR": 0.775,
+      "bias": 0.65,
+      "pred_pct": 8.7
+    },
+    {
+      "stage": 16.75,
+      "CSI": 0.097,
+      "POD": 0.146,
+      "FAR": 0.775,
+      "bias": 0.65,
+      "pred_pct": 8.7
+    },
+    {
+      "stage": 17.0,
+      "CSI": 0.098,
+      "POD": 0.147,
+      "FAR": 0.776,
+      "bias": 0.66,
+      "pred_pct": 8.8
+    },
+    {
+      "stage": 17.25,
+      "CSI": 0.096,
+      "POD": 0.18,
+      "FAR": 0.828,
+      "bias": 1.04,
+      "pred_pct": 14.0
+    },
+    {
+      "stage": 17.5,
+      "CSI": 0.096,
+      "POD": 0.18,
+      "FAR": 0.828,
+      "bias": 1.04,
+      "pred_pct": 14.0
+    },
+    {
+      "stage": 17.75,
+      "CSI": 0.096,
+      "POD": 0.18,
+      "FAR": 0.828,
+      "bias": 1.04,
+      "pred_pct": 14.0
+    },
+    {
+      "stage": 18.0,
+      "CSI": 0.164,
+      "POD": 0.335,
+      "FAR": 0.757,
+      "bias": 1.38,
+      "pred_pct": 18.5
+    },
+    {
+      "stage": 18.25,
+      "CSI": 0.179,
+      "POD": 0.489,
+      "FAR": 0.78,
+      "bias": 2.22,
+      "pred_pct": 29.8
+    },
+    {
+      "stage": 18.5,
+      "CSI": 0.179,
+      "POD": 0.489,
+      "FAR": 0.78,
+      "bias": 2.22,
+      "pred_pct": 29.8
+    },
+    {
+      "stage": 18.75,
+      "CSI": 0.179,
+      "POD": 0.489,
+      "FAR": 0.78,
+      "bias": 2.22,
+      "pred_pct": 29.8
+    },
+    {
+      "stage": 19.0,
+      "CSI": 0.179,
+      "POD": 0.491,
+      "FAR": 0.78,
+      "bias": 2.23,
+      "pred_pct": 29.9
+    },
+    {
+      "stage": 19.25,
+      "CSI": 0.175,
+      "POD": 0.581,
+      "FAR": 0.8,
+      "bias": 2.91,
+      "pred_pct": 39.0
+    },
+    {
+      "stage": 19.5,
+      "CSI": 0.175,
+      "POD": 0.581,
+      "FAR": 0.8,
+      "bias": 2.91,
+      "pred_pct": 39.0
+    },
+    {
+      "stage": 19.75,
+      "CSI": 0.175,
+      "POD": 0.581,
+      "FAR": 0.8,
+      "bias": 2.91,
+      "pred_pct": 39.0
+    },
+    {
+      "stage": 20.0,
+      "CSI": 0.174,
+      "POD": 0.581,
+      "FAR": 0.801,
+      "bias": 2.92,
+      "pred_pct": 39.1
+    },
+    {
+      "stage": 20.25,
+      "CSI": 0.166,
+      "POD": 0.646,
+      "FAR": 0.818,
+      "bias": 3.54,
+      "pred_pct": 47.5
+    },
+    {
+      "stage": 20.5,
+      "CSI": 0.166,
+      "POD": 0.646,
+      "FAR": 0.818,
+      "bias": 3.54,
+      "pred_pct": 47.5
+    },
+    {
+      "stage": 20.75,
+      "CSI": 0.166,
+      "POD": 0.646,
+      "FAR": 0.818,
+      "bias": 3.54,
+      "pred_pct": 47.5
+    },
+    {
+      "stage": 21.0,
+      "CSI": 0.167,
+      "POD": 0.655,
+      "FAR": 0.817,
+      "bias": 3.57,
+      "pred_pct": 47.9
+    },
+    {
+      "stage": 21.25,
+      "CSI": 0.167,
+      "POD": 0.718,
+      "FAR": 0.821,
+      "bias": 4.02,
+      "pred_pct": 53.9
+    },
+    {
+      "stage": 21.5,
+      "CSI": 0.167,
+      "POD": 0.718,
+      "FAR": 0.821,
+      "bias": 4.02,
+      "pred_pct": 53.9
+    },
+    {
+      "stage": 21.75,
+      "CSI": 0.167,
+      "POD": 0.718,
+      "FAR": 0.821,
+      "bias": 4.02,
+      "pred_pct": 53.9
+    },
+    {
+      "stage": 22.0,
+      "CSI": 0.167,
+      "POD": 0.718,
+      "FAR": 0.821,
+      "bias": 4.02,
+      "pred_pct": 53.9
+    },
+    {
+      "stage": 22.25,
+      "CSI": 0.166,
+      "POD": 0.756,
+      "FAR": 0.825,
+      "bias": 4.32,
+      "pred_pct": 57.9
+    },
+    {
+      "stage": 22.5,
+      "CSI": 0.166,
+      "POD": 0.756,
+      "FAR": 0.825,
+      "bias": 4.32,
+      "pred_pct": 57.9
+    },
+    {
+      "stage": 22.75,
+      "CSI": 0.166,
+      "POD": 0.756,
+      "FAR": 0.825,
+      "bias": 4.32,
+      "pred_pct": 57.9
+    },
+    {
+      "stage": 23.0,
+      "CSI": 0.166,
+      "POD": 0.758,
+      "FAR": 0.825,
+      "bias": 4.34,
+      "pred_pct": 58.1
+    },
+    {
+      "stage": 23.25,
+      "CSI": 0.166,
+      "POD": 0.79,
+      "FAR": 0.826,
+      "bias": 4.55,
+      "pred_pct": 61.0
+    },
+    {
+      "stage": 23.5,
+      "CSI": 0.166,
+      "POD": 0.79,
+      "FAR": 0.826,
+      "bias": 4.55,
+      "pred_pct": 61.0
+    },
+    {
+      "stage": 23.75,
+      "CSI": 0.166,
+      "POD": 0.79,
+      "FAR": 0.826,
+      "bias": 4.55,
+      "pred_pct": 61.0
+    },
+    {
+      "stage": 24.0,
+      "CSI": 0.166,
+      "POD": 0.79,
+      "FAR": 0.826,
+      "bias": 4.55,
+      "pred_pct": 61.0
+    },
+    {
+      "stage": 24.25,
+      "CSI": 0.167,
+      "POD": 0.825,
+      "FAR": 0.827,
+      "bias": 4.76,
+      "pred_pct": 63.8
+    },
+    {
+      "stage": 24.5,
+      "CSI": 0.167,
+      "POD": 0.825,
+      "FAR": 0.827,
+      "bias": 4.76,
+      "pred_pct": 63.8
+    },
+    {
+      "stage": 24.75,
+      "CSI": 0.167,
+      "POD": 0.825,
+      "FAR": 0.827,
+      "bias": 4.76,
+      "pred_pct": 63.8
+    },
+    {
+      "stage": 25.0,
+      "CSI": 0.167,
+      "POD": 0.825,
+      "FAR": 0.827,
+      "bias": 4.77,
+      "pred_pct": 64.0
+    },
+    {
+      "stage": 25.25,
+      "CSI": 0.166,
+      "POD": 0.85,
+      "FAR": 0.829,
+      "bias": 4.97,
+      "pred_pct": 66.6
+    },
+    {
+      "stage": 25.5,
+      "CSI": 0.166,
+      "POD": 0.85,
+      "FAR": 0.829,
+      "bias": 4.97,
+      "pred_pct": 66.6
+    },
+    {
+      "stage": 25.75,
+      "CSI": 0.166,
+      "POD": 0.85,
+      "FAR": 0.829,
+      "bias": 4.97,
+      "pred_pct": 66.6
+    },
+    {
+      "stage": 26.0,
+      "CSI": 0.166,
+      "POD": 0.85,
+      "FAR": 0.829,
+      "bias": 4.98,
+      "pred_pct": 66.8
+    },
+    {
+      "stage": 26.25,
+      "CSI": 0.163,
+      "POD": 0.861,
+      "FAR": 0.832,
+      "bias": 5.14,
+      "pred_pct": 68.9
+    },
+    {
+      "stage": 26.5,
+      "CSI": 0.163,
+      "POD": 0.861,
+      "FAR": 0.832,
+      "bias": 5.14,
+      "pred_pct": 68.9
+    },
+    {
+      "stage": 26.75,
+      "CSI": 0.163,
+      "POD": 0.861,
+      "FAR": 0.832,
+      "bias": 5.14,
+      "pred_pct": 68.9
+    },
+    {
+      "stage": 27.0,
+      "CSI": 0.163,
+      "POD": 0.862,
+      "FAR": 0.833,
+      "bias": 5.15,
+      "pred_pct": 69.0
+    },
+    {
+      "stage": 27.25,
+      "CSI": 0.159,
+      "POD": 0.865,
+      "FAR": 0.837,
+      "bias": 5.3,
+      "pred_pct": 71.1
+    },
+    {
+      "stage": 27.5,
+      "CSI": 0.159,
+      "POD": 0.865,
+      "FAR": 0.837,
+      "bias": 5.3,
+      "pred_pct": 71.1
+    },
+    {
+      "stage": 27.75,
+      "CSI": 0.159,
+      "POD": 0.865,
+      "FAR": 0.837,
+      "bias": 5.3,
+      "pred_pct": 71.1
+    },
+    {
+      "stage": 28.0,
+      "CSI": 0.159,
+      "POD": 0.865,
+      "FAR": 0.837,
+      "bias": 5.31,
+      "pred_pct": 71.2
+    },
+    {
+      "stage": 28.25,
+      "CSI": 0.155,
+      "POD": 0.868,
+      "FAR": 0.841,
+      "bias": 5.46,
+      "pred_pct": 73.2
+    },
+    {
+      "stage": 28.5,
+      "CSI": 0.155,
+      "POD": 0.868,
+      "FAR": 0.841,
+      "bias": 5.46,
+      "pred_pct": 73.2
+    },
+    {
+      "stage": 28.75,
+      "CSI": 0.155,
+      "POD": 0.868,
+      "FAR": 0.841,
+      "bias": 5.46,
+      "pred_pct": 73.2
+    },
+    {
+      "stage": 29.0,
+      "CSI": 0.155,
+      "POD": 0.868,
+      "FAR": 0.841,
+      "bias": 5.47,
+      "pred_pct": 73.3
+    },
+    {
+      "stage": 29.25,
+      "CSI": 0.153,
+      "POD": 0.873,
+      "FAR": 0.844,
+      "bias": 5.59,
+      "pred_pct": 74.9
+    },
+    {
+      "stage": 29.5,
+      "CSI": 0.153,
+      "POD": 0.873,
+      "FAR": 0.844,
+      "bias": 5.59,
+      "pred_pct": 74.9
+    },
+    {
+      "stage": 29.75,
+      "CSI": 0.153,
+      "POD": 0.873,
+      "FAR": 0.844,
+      "bias": 5.59,
+      "pred_pct": 74.9
+    },
+    {
+      "stage": 30.0,
+      "CSI": 0.153,
+      "POD": 0.873,
+      "FAR": 0.844,
+      "bias": 5.59,
+      "pred_pct": 74.9
+    },
+    {
+      "stage": 30.25,
+      "CSI": 0.15,
+      "POD": 0.876,
+      "FAR": 0.846,
+      "bias": 5.7,
+      "pred_pct": 76.4
+    },
+    {
+      "stage": 30.5,
+      "CSI": 0.15,
+      "POD": 0.876,
+      "FAR": 0.846,
+      "bias": 5.7,
+      "pred_pct": 76.4
+    },
+    {
+      "stage": 30.75,
+      "CSI": 0.15,
+      "POD": 0.876,
+      "FAR": 0.846,
+      "bias": 5.7,
+      "pred_pct": 76.4
+    },
+    {
+      "stage": 31.0,
+      "CSI": 0.15,
+      "POD": 0.876,
+      "FAR": 0.846,
+      "bias": 5.7,
+      "pred_pct": 76.5
+    },
+    {
+      "stage": 31.25,
+      "CSI": 0.149,
+      "POD": 0.88,
+      "FAR": 0.848,
+      "bias": 5.8,
+      "pred_pct": 77.7
+    },
+    {
+      "stage": 31.5,
+      "CSI": 0.149,
+      "POD": 0.88,
+      "FAR": 0.848,
+      "bias": 5.8,
+      "pred_pct": 77.7
+    },
+    {
+      "stage": 31.75,
+      "CSI": 0.149,
+      "POD": 0.88,
+      "FAR": 0.848,
+      "bias": 5.8,
+      "pred_pct": 77.7
+    }
+  ],
+  "generated": "2026-06-16"
+}

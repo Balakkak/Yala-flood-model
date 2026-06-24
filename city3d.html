@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>โมเดล 3D เมืองยะลา · Yala 3D City</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <style>
+    html,body { margin:0; height:100%; font-family:'Sarabun',sans-serif; }
+    #map { position:absolute; inset:0; }
+    .panel {
+      position:absolute; z-index:5; background:rgba(255,255,255,.95); backdrop-filter:blur(6px);
+      border:1px solid #c7d2e0; border-radius:12px; box-shadow:0 6px 22px rgba(15,38,73,.18);
+    }
+    .top { top:14px; left:14px; padding:12px 14px; max-width:300px; }
+    .top h1 { margin:0 0 3px; font-size:15px; color:#0c3b6e; display:flex; align-items:center; gap:6px; }
+    .top h1 .ti { color:#0ea5e9; }
+    .top p { margin:0; font-size:11.5px; color:#64748b; line-height:1.5; }
+    .top a { color:#0284c7; text-decoration:none; font-weight:600; }
+    .legend { bottom:16px; left:14px; padding:11px 13px; }
+    .legend b { font-size:11.5px; color:#0c3b6e; }
+    .lg-bar { width:170px; height:11px; border-radius:6px; margin:7px 0 3px;
+      background:linear-gradient(90deg,#cfe8ff,#9ec9f0,#f6c66b,#ef8e4d,#d6452e); }
+    .lg-scale { display:flex; justify-content:space-between; font-size:10px; color:#64748b; }
+    .ctrl { bottom:16px; right:14px; padding:12px 13px; width:250px; }
+    .ctrl .row { display:flex; align-items:center; gap:9px; }
+    .ctrl h2 { margin:0 0 9px; font-size:12.5px; color:#0c3b6e; display:flex; align-items:center; gap:6px; }
+    .ctrl h2 .ti { color:#0ea5e9; }
+    .btn { width:32px; height:32px; flex:0 0 auto; border:none; border-radius:8px; background:#0ea5e9;
+      color:#fff; cursor:pointer; display:grid; place-items:center; }
+    .btn:hover { background:#0284c7; }
+    .btn.off { background:#94a3b8; }
+    #fSld { flex:1 1 auto; accent-color:#0ea5e9; }
+    .ctrl .stat { display:flex; justify-content:space-between; margin-top:9px; font-size:11.5px; color:#475569; }
+    .ctrl .stat b { color:#0c3b6e; }
+    .muted { color:#94a3b8; font-size:10.5px; margin-top:8px; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel top">
+  <h1><i class="ti ti-building-skyscraper"></i> โมเดล 3D เมืองยะลา</h1>
+  <p>ตึก <b id="bCount">…</b> หลัง จาก Microsoft ML Footprints · ความสูงไล่สีตามระดับ<br>
+     ลากเมาส์ขวา/สองนิ้ว = เอียง-หมุน · <a href="dashboard.html" target="_top">📊 แดชบอร์ดวิเคราะห์ 2D →</a></p>
+</div>
+
+<div class="panel legend">
+  <b><i class="ti ti-arrow-up"></i> ความสูงอาคาร (ม.)</b>
+  <div class="lg-bar"></div>
+  <div class="lg-scale"><span>6</span><span>12</span><span>16</span><span>24</span><span>30+</span></div>
+</div>
+
+<div class="panel ctrl" id="floodCtrl" style="display:none;">
+  <h2><i class="ti ti-ripple"></i> น้ำท่วม LISFLOOD-FP บนเมือง</h2>
+  <div class="row">
+    <button class="btn off" id="fToggle" title="เปิด/ปิดชั้นน้ำ"><i class="ti ti-droplet"></i></button>
+    <button class="btn" id="fPlay" title="เล่นไทม์ไลน์"><i class="ti ti-player-play"></i></button>
+    <input type="range" id="fSld" min="0" value="0" step="1">
+    <span id="fTime" style="font-size:11px;color:#334155;min-width:42px;text-align:right;">0 ชม.</span>
+  </div>
+  <div class="stat"><span>พื้นที่ท่วม <b id="fPct">0</b>%</span><span>ลึก P95 <b id="fDep">0</b> ม.</span></div>
+  <div class="muted">ชั้นน้ำวางบนพื้น เห็นน้ำล้อมฐานตึก (depth ระดับ screening)</div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    sources: {
+      osm: { type:'raster', tiles:['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+             'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize:256,
+             attribution:'© OpenStreetMap' }
+    },
+    layers: [{ id:'osm', type:'raster', source:'osm' }]
+  },
+  center: [101.2845, 6.547], zoom: 14.2, pitch: 58, bearing: -22, maxZoom: 19
+});
+map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'top-right');
+map.addControl(new maplibregl.AttributionControl({ compact:true }));
+
+// เมื่อฝังใน iframe/modal: container อาจเริ่มที่ขนาด 0 แล้วค่อยได้ขนาดจริง
+// ResizeObserver สั่ง map.resize() ให้เรนเดอร์ใหม่เมื่อกล่องมีขนาด (modal เปิด)
+try { new ResizeObserver(function () { map.resize(); }).observe(document.getElementById('map')); } catch (e) {}
+
+const HEIGHT_COLOR = ['interpolate',['linear'],['get','height'],
+  6,'#cfe8ff', 9,'#9ec9f0', 12,'#f6c66b', 16,'#ef8e4d', 24,'#d6452e', 32,'#a02616'];
+
+let _built = false;
+async function buildScene() {
+  if (_built) return; _built = true;
+
+  // ---- terrain จริง (AW3D30) → พื้น/ถนน/ตึก ตามความสูงภูมิประเทศ ----
+  if (!map.getSource('terrain-dem')) {
+    map.addSource('terrain-dem', { type:'raster-dem', tiles:['terrain/{z}/{x}/{y}.png'],
+      encoding:'terrarium', tileSize:256, minzoom:12, maxzoom:16 });
+    map.setTerrain({ source:'terrain-dem', exaggeration:1.0 });
+  }
+  if (map.setSky) map.setSky({ 'sky-color':'#bcd9f2', 'horizon-color':'#eaf2fb',
+    'fog-color':'#dce8f5', 'fog-ground-blend':0.4, 'sky-horizon-blend':0.6 });
+
+  // ---- 3D buildings ----
+  const bj = await (await fetch('data/yala_buildings.geojson')).json();
+  document.getElementById('bCount').textContent = bj.features.length.toLocaleString();
+  map.addSource('buildings', { type:'geojson', data: bj });
+  map.addLayer({
+    id:'buildings-3d', type:'fill-extrusion', source:'buildings',
+    paint:{
+      'fill-extrusion-color': HEIGHT_COLOR,
+      'fill-extrusion-height': ['get','height'],
+      'fill-extrusion-base': 0,
+      'fill-extrusion-opacity': 0.92,
+      'fill-extrusion-vertical-gradient': true
+    }
+  });
+
+  // ===== น้ำ 3D แบบ cinematic : custom WebGL water surface =====
+  // ผิวน้ำ mesh ต่อเนื่อง + คลื่นเคลื่อนไหว + แสงแดดสะท้อนวิ่ง (specular) + fresnel
+  // ความลึกส่งผ่าน data texture (อัปเดตรายเฟรม → ไต่ระดับ) · depth-test กับตึก → น้ำหุ้มโคนตึก
+  try {
+    const [m, W] = await Promise.all([
+      fetch('lisflood/frames/manifest.json').then(r => r.json()),
+      fetch('lisflood/frames/water3d.json').then(r => r.json())
+    ]);
+    const stat = m.frames, NF = W.n_frames;
+    const D = W.depths_cm, NC = W.ncols, NR = W.nrows;
+
+    // --- เรขาคณิตผิวน้ำ (vertex = ศูนย์กลางเซลล์) + ดัชนีสามเหลี่ยม ---
+    const M2 = maplibregl.MercatorCoordinate.fromLngLat({lng:101.285,lat:6.547},0).meterInMercatorCoordinateUnits();
+    const GND = W.ground_m || [];
+    const positions = new Float32Array(NC*NR*2), uvs = new Float32Array(NC*NR*2), grounds = new Float32Array(NC*NR);
+    for (let r=0;r<NR;r++) for (let c=0;c<NC;c++){
+      const i=r*NC+c, lng=W.origin_lon+(c+0.5)*W.dlon, lat=W.origin_lat-(r+0.5)*W.dlat;
+      const p=maplibregl.MercatorCoordinate.fromLngLat({lng,lat},0);
+      positions[i*2]=p.x; positions[i*2+1]=p.y;
+      uvs[i*2]=(c+0.5)/NC; uvs[i*2+1]=(r+0.5)/NR;
+      grounds[i]=GND[i]||0;
+    }
+    const idx=[];
+    for (let r=0;r<NR-1;r++) for (let c=0;c<NC-1;c++){
+      const a=r*NC+c, b=a+1, d=(r+1)*NC+c, e=d+1; idx.push(a,b,d, b,e,d);
+    }
+    const indices=new Uint16Array(idx), dmArr=new Uint8Array(NC*NR);  // ความลึกเป็น dm (×0.1=ม.)
+
+    const VS=`attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;
+    uniform mat4 u_matrix;uniform sampler2D u_depth;uniform float u_time;uniform float u_m2;
+    varying float v_depth;varying vec3 v_n;varying vec2 v_uv;
+    void main(){float dm=texture2D(u_depth,a_uv).r*255.0;float depth=dm*0.1;float wet=depth>0.05?1.0:0.0;
+    vec2 g=a_uv*110.0;vec2 d1=vec2(0.30,0.95),d2=vec2(0.80,0.30);          /* (ค) คลื่นไหลมีทิศ */
+    float p1=dot(g,d1)+u_time*2.2;float p2=dot(g,d2)*1.6+u_time*1.4;
+    float w=0.075*sin(p1)+0.045*sin(p2);vec2 gr=0.075*cos(p1)*d1+0.045*cos(p2)*d2*1.6;
+    v_n=normalize(vec3(-gr*wet,1.0));v_depth=depth;v_uv=a_uv;
+    float z=(a_ground+depth+w*wet)*u_m2;gl_Position=u_matrix*vec4(a_pos,z,1.0);}`;
+    const FS=`precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;uniform float u_time;
+    void main(){if(v_depth<0.05)discard;float dn=clamp(v_depth/2.5,0.0,1.0);
+    vec3 col=mix(vec3(0.30,0.62,0.80),vec3(0.03,0.20,0.45),dn);
+    vec3 N=normalize(v_n),V=vec3(0.0,0.0,1.0),L=normalize(vec3(0.55,0.35,0.78)),H=normalize(L+V);
+    float spec=pow(max(dot(N,H),0.0),90.0);float fres=pow(1.0-max(dot(N,V),0.0),4.0);
+    col=mix(col,vec3(0.62,0.80,0.95),fres*0.6);          /* (ก) สะท้อนฟ้า */
+    col+=vec3(1.0,0.97,0.85)*spec*1.3;                    /* แสงแดดวิ่ง */
+    float edge=1.0-smoothstep(0.04,0.28,v_depth);         /* (ข) โฟมขอบน้ำตื้น */
+    float crest=smoothstep(0.55,1.0,sin(dot(v_uv*120.0,vec2(0.4,0.9))+u_time*3.0)*0.5+0.5);
+    float foam=clamp(edge*0.8+crest*edge*0.6,0.0,1.0);
+    col=mix(col,vec3(0.95,0.98,1.0),foam*0.7);
+    float a=mix(0.45,0.86,dn)+spec*0.5+foam*0.3;gl_FragColor=vec4(col,clamp(a,0.0,0.96));}`;
+
+    let prog,aPos,aUv,aGnd,uMat,uTime,uM2,uDepth,posB,uvB,gndB,idxB,tex,vao;
+    const t0=performance.now();
+
+    const waterLayer = {
+      id:'water3d-gl', type:'custom', renderingMode:'3d',
+      onAdd(_map, gl){
+        const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+          if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error('water shader:',gl.getShaderInfoLog(o));return o;};
+        prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+        if(!gl.getProgramParameter(prog,gl.LINK_STATUS))console.error('water link:',gl.getProgramInfoLog(prog));
+        aPos=gl.getAttribLocation(prog,'a_pos');aUv=gl.getAttribLocation(prog,'a_uv');aGnd=gl.getAttribLocation(prog,'a_ground');
+        uMat=gl.getUniformLocation(prog,'u_matrix');uTime=gl.getUniformLocation(prog,'u_time');
+        uM2=gl.getUniformLocation(prog,'u_m2');uDepth=gl.getUniformLocation(prog,'u_depth');
+        posB=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,posB);gl.bufferData(gl.ARRAY_BUFFER,positions,gl.STATIC_DRAW);
+        uvB=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,uvB);gl.bufferData(gl.ARRAY_BUFFER,uvs,gl.STATIC_DRAW);
+        gndB=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,gndB);gl.bufferData(gl.ARRAY_BUFFER,grounds,gl.STATIC_DRAW);
+        idxB=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,idxB);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,indices,gl.STATIC_DRAW);
+        tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);   // กว้าง 114 ไม่หาร 4 ลงตัว → ต้องตั้ง 1
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.LUMINANCE,NC,NR,0,gl.LUMINANCE,gl.UNSIGNED_BYTE,dmArr);
+        // VAO ของตัวเอง — กันชน vertex state กับ MapLibre (WebGL2)
+        vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER,posB); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,2,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,uvB); gl.enableVertexAttribArray(aUv); gl.vertexAttribPointer(aUv,2,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,gndB); gl.enableVertexAttribArray(aGnd); gl.vertexAttribPointer(aGnd,1,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,idxB);
+        gl.bindVertexArray(null);
+      },
+      render(gl, mtxArg){
+        if(!on) return;
+        const mtx = (mtxArg && mtxArg.defaultProjectionData) ? mtxArg.defaultProjectionData.mainMatrix : mtxArg;
+        const now=performance.now();
+        if(playing){ tt=ttAtStart+((now-animStart)/RISE_MS)*(NF-1); if(tt>=NF-1){tt=NF-1;playing=false;pico.className='ti ti-player-play';} }
+        // interpolate ความลึก → dm แล้วอัปเดต texture (ไต่ระดับลื่น)
+        const f0=Math.floor(tt), f1=Math.min(NF-1,f0+1), fr=tt-f0, A=D[f0], B=D[f1];
+        for(let i=0;i<dmArr.length;i++){ const cm=A[i]*(1-fr)+B[i]*fr; let v=(cm*0.1)|0; dmArr[i]=v>255?255:v; }
+        gl.useProgram(prog);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+        gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,NC,NR,gl.LUMINANCE,gl.UNSIGNED_BYTE,dmArr);
+        gl.uniform1i(uDepth,0); gl.uniformMatrix4fv(uMat,false,mtx);
+        gl.uniform1f(uTime,(now-t0)/1000); gl.uniform1f(uM2,M2);
+        gl.bindVertexArray(vao);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false);
+        gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+        gl.depthMask(true); gl.bindVertexArray(null);
+        if(now-lastStat>120){ lastStat=now; updateStats(); }
+        map.triggerRepaint();   // เล่นต่อเนื่อง → ผิวน้ำเคลื่อนไหวตลอด
+      }
+    };
+    map.addLayer(waterLayer);
+
+    const ctrl=document.getElementById('floodCtrl'); ctrl.style.display='block';
+    const sld=document.getElementById('fSld'), tlab=document.getElementById('fTime'),
+          pct=document.getElementById('fPct'), dep=document.getElementById('fDep'),
+          toggle=document.getElementById('fToggle'), playBtn=document.getElementById('fPlay'),
+          pico=playBtn.querySelector('i');
+    sld.max = NF - 1;
+    const RISE_MS = 26000;
+    let on = false, playing = false, tt = 0, animStart = 0, ttAtStart = 0, lastStat = 0;
+
+    function updateStats(){
+      const i=Math.round(tt), f=stat[i]||{};
+      sld.value=i; tlab.textContent=(f.t_hours!=null?f.t_hours:'')+' ชม.';
+      pct.textContent=(f.flooded_pct!=null?f.flooded_pct:'0');
+      dep.textContent=(f.depth_p95!=null?f.depth_p95:(f.max_depth!=null?f.max_depth:0));
+    }
+    function pause(){ playing=false; pico.className='ti ti-player-play'; }
+    function kick(){ if(on) map.triggerRepaint(); }
+    toggle.onclick=()=>{ on=!on; toggle.classList.toggle('off',!on); if(!on) pause(); else kick(); };
+    playBtn.onclick=()=>{
+      if(!on){ on=true; toggle.classList.remove('off'); }
+      if(playing) return pause();
+      if(tt>=NF-1) tt=0;
+      ttAtStart=tt; animStart=performance.now(); playing=true; pico.className='ti ti-player-pause'; kick();
+    };
+    sld.oninput=()=>{ pause(); tt=parseInt(sld.value,10); kick(); };
+    updateStats();
+  } catch(e){ console.warn('น้ำ 3D ใช้ไม่ได้ (ตรวจ water3d.json / WebGL)', e); }
+}
+// ยิงหลายทางกัน 'load' ไม่ทำงาน (เช่นตอนฝังใน iframe/modal ที่เริ่มซ่อนอยู่)
+map.on('load', buildScene);
+map.on('idle', buildScene);
+// fallback: รอจน style พร้อมแล้วค่อยสร้าง (กันกรณี 'load'/'idle' ไม่ยิงตอนฝังใน iframe)
+(function waitStyle(n) {
+  if (_built) return;
+  if (map.isStyleLoaded()) buildScene();
+  else if (n < 80) setTimeout(function () { waitStyle(n + 1); }, 250);
+})(0);
+</script>
+</body>
+</html>

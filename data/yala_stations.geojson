@@ -1,0 +1,29 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "สถานีวัดระดับน้ำ X.40 (แม่น้ำปัตตานี)",
+        "type": "river_gauge",
+        "status": "warning"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [101.258, 6.545]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "สถานีสูบน้ำหลัก (เทศบาลนครยะลา)",
+        "type": "pump_station",
+        "status": "active"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [101.265, 6.540]
+      }
+    }
+  ]
+}

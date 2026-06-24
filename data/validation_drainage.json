@@ -1,0 +1,20 @@
+{
+  "reference": "GISTDA satellite flood extent พ.ย.2568",
+  "baseline": {
+    "stage": 19.0,
+    "CSI": 0.179,
+    "POD": 0.491,
+    "FAR": 0.78,
+    "pred_pct": 29.9
+  },
+  "improved_drainage": {
+    "stage": 18.25,
+    "CSI": 0.182,
+    "POD": 0.486,
+    "FAR": 0.775,
+    "pred_pct": 29.0
+  },
+  "csi_change_pct": 1.7,
+  "note": "B ใช้ทางน้ำจริงเป็น seed + หักความจุระบาย(สูบ+ฝาท่อ)",
+  "generated": "2026-06-18"
+}

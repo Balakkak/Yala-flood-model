@@ -1,0 +1,29 @@
+# dependencies & build output
+node_modules/
+dist/
+
+# OS / editor junk
+.DS_Store
+*.log
+*.tmp
+*.swp
+
+# ข้อมูลดิบ/ตัวกลางขนาดใหญ่ — สร้างใหม่ได้ด้วยสคริปต์ใน scripts/ (ไม่ต้อง track)
+raw/
+
+# รูปภาพต้นฉบับขนาดใหญ่ที่แอปไม่ได้ใช้ตอนรัน (~304MB)
+data/_น้ำท่วม/
+
+# ไฟล์ DEM ต้นฉบับที่ไม่ได้ถูกเรียกใช้ (ใช้ output_AW3D30.tif แทน)
+data/output_AW3D30_original.tif
+
+# LISFLOOD-FP — โค้ดโมเดล + ข้อมูล input/output ของการรันโมเดล (ใหญ่มาก, ไม่ใช่ส่วนเว็บแอป)
+# แอปใช้แค่ผลลัพธ์ที่ render แล้วใน lisflood/frames/ (track ไว้) ตอนรันไทม์
+lisflood/src/
+lisflood/inputs/
+
+# หมายเหตุ: terrain/ (tiles 3D), data/*.geojson และ lisflood/frames/ ถูก track ไว้
+# เพราะแอปต้องใช้ตอนรัน — ถ้าต้องการ repo เล็กลง พิจารณาย้าย terrain ไป Git LFS/CDN
+
+# Claude Code local settings (per-user)
+.claude/settings.local.json

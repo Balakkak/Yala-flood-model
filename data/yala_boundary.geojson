@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "เทศบาลนครยะลา (ขอบเขตเมือง)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [101.258, 6.525],
+            [101.305, 6.525],
+            [101.305, 6.568],
+            [101.258, 6.568],
+            [101.258, 6.525]
+          ]
+        ]
+      }
+    }
+  ]
+}

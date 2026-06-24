@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>โมเดล 3D เมืองยะลา · Yala 3D City</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <link rel="stylesheet" href="assets/styles.css">
+  <style>
+    .map3d-wrap { flex: 1; position: relative; overflow: hidden; }
+    #map { position: absolute; inset: 0; }
+    .panel {
+      position:absolute; z-index:5; background:rgba(255,255,255,.96); backdrop-filter:blur(8px);
+      border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow-md);
+    }
+    .top { top:16px; left:16px; padding:13px 15px; max-width:312px; }
+    .top h1 { margin:0 0 3px; font-size:15px; color:#0c3b6e; display:flex; align-items:center; gap:6px; }
+    .top h1 .ti { color:#0ea5e9; }
+    .top p { margin:0; font-size:11.5px; color:#64748b; line-height:1.5; }
+    .top a { color:#0284c7; text-decoration:none; font-weight:600; }
+    .legend { bottom:32px; left:14px; padding:11px 13px; }
+    .legend b { font-size:11.5px; color:#0c3b6e; }
+    .lg-layers { border-top:1px solid #e2e8f0; margin-top:8px; }
+    .lg-tog { display:flex; align-items:center; gap:6px; font-size:11px; color:#475569; cursor:pointer; margin:3px 0; }
+    .lg-tog input { accent-color:#0ea5e9; cursor:pointer; margin:0; }
+    .lg-tog .dot { width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+    .lg-tog .dot-pump { background:#0284c7; border:1.5px solid #fff; box-shadow:0 0 0 1px #0284c7; }
+    .lg-tog .dot-mh { background:#f59e0b; }
+    .lg-tog .dot-ww { background:#38bdf8; }
+    .lg-bar { width:170px; height:11px; border-radius:6px; margin:7px 0 3px;
+      background:linear-gradient(90deg,#cfe8ff,#9ec9f0,#f6c66b,#ef8e4d,#d6452e); }
+    .lg-scale { display:flex; justify-content:space-between; font-size:10px; color:#64748b; }
+    /* แผงควบคุม 3D — สไตล์การ์ดเหมือนแผงขวาของหน้า 2D */
+    .ctrl { bottom:16px; right:16px; width:344px; padding:0;
+      background:#fff; backdrop-filter:none; max-height:calc(100% - 32px); overflow-y:auto;
+      transition:opacity .25s ease, transform .25s ease; }
+    .ctrl.is-hidden { opacity:0; transform:translateY(10px) scale(.98); pointer-events:none; }
+    .ctrl .card-head { position:relative; padding-right:40px; }
+    .panel-close { position:absolute; top:10px; right:12px; width:24px; height:24px; border:none;
+      background:transparent; color:#94a3b8; cursor:pointer; border-radius:7px; display:grid; place-items:center; }
+    .panel-close:hover { background:#f1f5f9; color:#0c3b6e; }
+    .panel-close .ti { font-size:16px; }
+    .ctrl::-webkit-scrollbar { width:8px; }
+    .ctrl::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; border:2px solid #fff; }
+    /* ปุ่มเรียกแผงจำลอง (CTA) — โชว์ตอนแผงถูกซ่อน */
+    .cta-sim { position:absolute; z-index:6; bottom:16px; right:16px;
+      display:flex; align-items:center; gap:8px; padding:13px 20px; border:none; border-radius:14px;
+      background:linear-gradient(135deg,#0ea5e9,#0369a1); color:#fff; font-family:inherit;
+      font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 8px 22px -6px rgba(2,132,199,.6);
+      transition:transform .15s ease, box-shadow .15s ease, opacity .2s ease; }
+    .cta-sim:hover { transform:translateY(-2px); box-shadow:0 12px 26px -6px rgba(2,132,199,.7); }
+    .cta-sim.is-hidden { opacity:0; transform:translateY(10px); pointer-events:none; }
+    .ctrl .sim-row { margin-bottom: 11px; }
+    .ctrl .sim-cur-val { font-size: 17px; }
+    .ctrl .row { display:flex; align-items:center; gap:9px; }
+    .sl { margin-bottom:9px; }
+    .sl label { display:block; font-size:11px; color:#475569; margin-bottom:3px; }
+    .sl label b { color:#0c3b6e; float:right; font-weight:700; }
+    .sl input[type=range] { width:100%; accent-color:#0ea5e9; }
+    .row2 { display:flex; gap:8px; margin:11px 0 4px; }
+    .bigbtn { flex:1; border:none; border-radius:9px; padding:9px 6px; font-family:inherit;
+      font-size:12.5px; font-weight:700; color:#fff; background:#0ea5e9; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:5px; }
+    .bigbtn:hover { background:#0284c7; }
+    .bigbtn.alt { background:#64748b; flex:0 0 84px; }
+    .bigbtn.alt:hover { background:#475569; }
+    .tl { display:flex; align-items:center; gap:8px; margin:9px 0 4px; }
+    .tlbtn { flex:0 0 auto; width:30px; height:30px; border:none; border-radius:8px; background:#0c3b6e;
+      color:#fff; cursor:pointer; display:grid; place-items:center; }
+    .tlbtn:hover { background:#0a2f57; }
+    .tlbtn .ti { font-size:15px; }
+    #tlSld { flex:1 1 auto; accent-color:#0c3b6e; }
+    #tlPct { flex:0 0 auto; font-size:11px; font-weight:600; color:#334155; min-width:34px; text-align:right; }
+    .ctrl h2 { margin:0 0 9px; font-size:12.5px; color:#0c3b6e; display:flex; align-items:center; gap:6px; }
+    .ctrl h2 .ti { color:#0ea5e9; }
+    .btn { width:32px; height:32px; flex:0 0 auto; border:none; border-radius:8px; background:#0ea5e9;
+      color:#fff; cursor:pointer; display:grid; place-items:center; }
+    .btn:hover { background:#0284c7; }
+    .btn.off { background:#94a3b8; }
+    #fSld { flex:1 1 auto; accent-color:#0ea5e9; }
+    .ctrl .stat { display:flex; justify-content:space-between; margin-top:9px; font-size:11.5px; color:#475569; }
+    .ctrl .stat b { color:#0c3b6e; }
+    .verdict { margin-top:11px; padding:8px 11px; border-radius:9px; font-size:12.5px; font-weight:700;
+      display:flex; align-items:center; gap:7px; line-height:1.3; transition:background .25s,color .25s; }
+    .verdict .ti { font-size:16px; flex:0 0 auto; }
+    .verdict.v-safe { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+    .verdict.v-watch{ background:#fffbeb; color:#b45309; border:1px solid #fde68a; }
+    .verdict.v-flood{ background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+    .vthr { margin-top:7px; font-size:10.5px; color:#64748b; line-height:1.45; }
+    .vthr b { color:#0c3b6e; }
+    .muted { color:#94a3b8; font-size:10.5px; margin-top:8px; }
+    .live-btn { width:100%; border:1px solid #bae6fd; border-radius:9px; padding:7px;
+      background:#f0f9ff; color:#0369a1; font-family:inherit; font-size:11.5px; font-weight:700;
+      cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
+    .live-btn:hover { background:#e0f2fe; }
+    .live-status { font-size:10px; color:#64748b; margin:5px 0 10px; text-align:center; line-height:1.4; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div class="brand-mark"><i class="ti ti-ripple"></i></div>
+    <div class="brand-text">
+      <h1>ศูนย์เฝ้าระวังและจำลองน้ำท่วม เทศบาลนครยะลา</h1>
+      <p>YALA FLOOD GIS &middot; MONITORING &amp; SIMULATION</p>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-meta">
+      <div class="view-toggle">
+        <a href="dashboard.html">🗺️ 2D</a>
+        <a href="index.html" class="active">🏙️ 3D</a>
+      </div>
+      <span class="chip">EPSG:32647 &middot; UTM 47N</span>
+      <span class="status-pill is-connecting"><span class="status-dot"></span> <span id="statusText">กำลังเชื่อมต่อ…</span></span>
+      <span class="header-clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <div class="map3d-wrap">
+    <div id="map"></div>
+
+    <div class="panel top">
+      <h1><i class="ti ti-building-skyscraper"></i> โมเดล 3D เมืองยะลา</h1>
+      <p>ตึก <b id="bCount">…</b> หลัง จาก Microsoft ML Footprints · ความสูงไล่สีตามระดับ<br>
+         ลากเมาส์ขวา / สองนิ้ว = เอียง-หมุน</p>
+    </div>
+
+<div class="panel legend">
+  <b><i class="ti ti-arrow-up"></i> ความสูงอาคาร (ม.)</b>
+  <div class="lg-bar"></div>
+  <div class="lg-scale"><span>6</span><span>12</span><span>16</span><span>24</span><span>30+</span></div>
+  <div class="lg-layers">
+    <b style="display:block;margin:9px 0 5px;"><i class="ti ti-stack-2"></i> โครงสร้างระบายน้ำ</b>
+    <label class="lg-tog"><input type="checkbox" id="togPumps" checked><span class="dot dot-pump"></span> สถานีสูบน้ำ (11)</label>
+    <label class="lg-tog"><input type="checkbox" id="togManholes"><span class="dot dot-mh"></span> ฝาท่อ/ตะแกรง (<span id="mhCount">9,262</span>)</label>
+    <label class="lg-tog"><input type="checkbox" id="togWaterways"><span class="dot dot-ww"></span> ทางน้ำเทศบาล</label>
+  </div>
+</div>
+
+<button id="openSim" class="cta-sim"><i class="ti ti-droplet-filled" style="font-size:18px;"></i> จำลองสถานการณ์น้ำท่วม</button>
+
+<div class="panel ctrl is-hidden" id="simCtrl">
+  <div class="card-head">
+    <i class="ti ti-sliders"></i>
+    <h2>จำลองสถานการณ์น้ำท่วม</h2>
+    <span class="sub">Simulation</span>
+    <button id="closeSim" class="panel-close" title="ปิด" aria-label="ปิดแผง"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="card-body">
+  <p class="note" style="margin-bottom:13px;">ปรับค่าด้านล่างแล้วกด <b>จำลองน้ำท่วม</b> เพื่อดูพื้นที่เสี่ยงและจุดที่ควรแก้</p>
+  <button id="bLive" class="live-btn"><i class="ti ti-rss" style="font-size:13px;"></i> ดึงค่าปัจจุบันจริง</button>
+  <div id="liveStatus" class="live-status">เขื่อนบางลาง + ฝนยะลา (ThaiWater · Open-Meteo)</div>
+  <div class="sim-row">
+    <div class="sim-label-row">
+      <span class="sim-label-text"><i class="ti ti-cloud-rain" style="font-size:13px;color:#0284c7;"></i> ปริมาณฝน</span>
+      <span class="sim-cur-val"><span id="vRain">40</span><span class="sim-cur-unit"> mm/hr</span></span>
+    </div>
+    <div class="sim-track-wrap">
+      <input type="range" id="sRain" class="sim-slider" min="0" max="100" value="40" step="1">
+      <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .30)" data-warn="⚠ 30"></span>
+    </div>
+    <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
+    <p class="sim-hint">≥ 30 mm/hr = เสี่ยงน้ำท่วมฉับพลัน</p>
+  </div>
+  <div class="sim-row">
+    <div class="sim-label-row">
+      <span class="sim-label-text"><i class="ti ti-wave-sine" style="font-size:13px;color:#0284c7;"></i> ระดับน้ำแม่น้ำปัตตานี</span>
+      <span class="sim-cur-val"><span id="vRiver">50</span><span class="sim-cur-unit"> %</span></span>
+    </div>
+    <div class="sim-track-wrap">
+      <input type="range" id="sRiver" class="sim-slider" min="0" max="100" value="50" step="1">
+      <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .75)" data-warn="⚠ 75"></span>
+    </div>
+    <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
+    <p class="sim-hint">≥ 75% = น้ำเอ่อล้นตลิ่ง (+14.00 ม.รทก.)</p>
+  </div>
+  <div class="sim-row">
+    <div class="sim-label-row">
+      <span class="sim-label-text"><i class="ti ti-dam" style="font-size:13px;color:#0284c7;"></i> ระดับน้ำเขื่อนบางลาง</span>
+      <span class="sim-cur-val"><span id="vDam">50</span><span class="sim-cur-unit"> %</span></span>
+    </div>
+    <div class="sim-track-wrap">
+      <input type="range" id="sDam" class="sim-slider" min="0" max="100" value="50" step="1">
+      <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .90)" data-warn="⚠ 90"></span>
+    </div>
+    <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
+    <p class="sim-hint">≥ 90% = เสี่ยงระบายฉุกเฉิน (+9 ชม. ถึงเมือง)</p>
+  </div>
+
+  <!-- ระยะเวลาจำลอง (เหมือนหน้า 2D) -->
+  <div class="sim-row" style="margin-bottom:12px;">
+    <div class="sim-label-row" style="margin-bottom:7px;">
+      <span class="sim-label-text"><i class="ti ti-clock" style="font-size:13px;color:#0284c7;"></i> ระยะเวลาจำลอง</span>
+      <span style="font-size:11px;color:var(--ink-400);">ยิ่งนาน น้ำยิ่งแผ่กว้าง</span>
+    </div>
+    <div class="sim-duration-group" id="durGroup3d">
+      <button class="btn-sim-duration active" data-hours="24">24 ชม.</button>
+      <button class="btn-sim-duration" data-hours="72">3 วัน</button>
+      <button class="btn-sim-duration" data-hours="168">7 วัน</button>
+    </div>
+  </div>
+
+  <!-- สถานะแม่น้ำปัตตานี (เหมือนหน้า 2D) -->
+  <div class="sim-river-box">
+    <div class="sim-river-head">
+      <span><i class="ti ti-wave-sine" style="font-size:12px;"></i> สถานะแม่น้ำปัตตานี</span>
+      <span id="rb3dLevel" class="sim-river-val">ปกติ (50%)</span>
+    </div>
+    <div class="sim-river-track">
+      <div id="rb3dBar" class="sim-river-fill" style="width:50%;"></div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <button id="bSim" class="bigbtn"><i class="ti ti-player-play"></i> จำลองน้ำท่วม</button>
+  </div>
+  <div id="verdict" class="verdict v-safe"><i class="ti ti-shield-check"></i> <span id="vText">ยังไม่ท่วม</span></div>
+  <div class="stat"><span>พื้นที่ท่วม <b id="oPct">0</b>%</span><span>ลึกทั่วไป <b id="oDep">0</b> ม.</span></div>
+  <div id="vThr" class="vthr"></div>
+  <div class="sim-disclaimer">
+    <i class="ti ti-alert-triangle"></i>
+    <span>ผลเป็นระดับ <b>screening (เบื้องต้น)</b> บน DEM AW3D30 30 ม. (ความสูง ±5 ม.) — บอกลำดับท่วมก่อน-หลัง ทิศทางน้ำ และพื้นที่เสี่ยงได้ <b>ยังไม่ใช่การพยากรณ์ระดับน้ำเชิง hydrodynamic จริง</b> · ค่า % พื้นที่และความลึก calibrate กับเหตุการณ์ พ.ย. 2568</span>
+  </div>
+  </div><!-- /.card-body -->
+</div>
+
+  </div><!-- /.map3d-wrap -->
+
+  <!-- แถบเวลาด้านล่าง (เหมือนหน้า 2D) -->
+  <div class="timeline">
+    <button id="tlPlay" class="btn-play"><i class="ti ti-player-play" style="font-size:16px;"></i> <span id="tlPlayTxt">เล่นจำลองน้ำท่วม</span></button>
+    <button id="bReset2" class="btn-drain" title="น้ำลด"><i class="ti ti-trending-down" style="font-size:15px;"></i> น้ำลด</button>
+    <div class="track">
+      <input type="range" id="tlSld" min="0" max="100" value="0" step="1" class="range-slider">
+      <div class="track-ticks"><span>0 ชม.</span><span>6</span><span>12</span><span>18</span><span>24 ชม.</span></div>
+    </div>
+    <span id="tlPct" class="time-label">0%</span>
+  </div>
+</div><!-- /.app -->
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="assets/live_status.js"></script>
+<script>
+// เปิด/ปิดแผงจำลอง — เริ่มต้นซ่อนแผง โชว์ปุ่ม CTA (หน้าแรกสะอาด)
+(function(){
+  var panel=document.getElementById('simCtrl'), cta=document.getElementById('openSim'), x=document.getElementById('closeSim');
+  if(!panel||!cta) return;
+  function open(){ panel.classList.remove('is-hidden'); cta.classList.add('is-hidden'); }
+  function close(){ panel.classList.add('is-hidden'); cta.classList.remove('is-hidden'); }
+  cta.onclick=open; if(x) x.onclick=close;
+})();
+
+// นาฬิกา header (ให้เหมือนแดชบอร์ด)
+(function(){ var el=document.getElementById('clock'); if(!el) return;
+  var pad=n=>String(n).padStart(2,'0');
+  function tick(){ var d=new Date(); el.textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
+  tick(); setInterval(tick,1000);
+})();
+
+// ===== คืนค่าสไลเดอร์จากหน้า 2D ทันที (ไม่ต้องรอแผนที่โหลด) + บันทึกเมื่อปรับ =====
+(function restoreSlidersEarly(){
+  var sR=document.getElementById('sRain'), sV=document.getElementById('sRiver'), sD=document.getElementById('sDam');
+  var lR=document.getElementById('vRain'), lV=document.getElementById('vRiver'), lD=document.getElementById('vDam');
+  var save=function(){ try{ localStorage.setItem('yalaSim', JSON.stringify({
+    rain:+sR.value, river:+sV.value, dam:+sD.value })); }catch(e){} };
+  var s=null; try{ s=JSON.parse(localStorage.getItem('yalaSim')||'null'); }catch(e){}
+  if(s){
+    if(s.rain !=null){ sR.value=s.rain;  if(lR)lR.textContent=s.rain; }
+    if(s.river!=null){ sV.value=s.river; if(lV)lV.textContent=s.river; }
+    if(s.dam  !=null){ sD.value=s.dam;   if(lD)lD.textContent=s.dam; }
+  }
+  [sR,sV,sD].forEach(function(s){ s&&s.addEventListener('input',save); });
+})();
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    sources: {
+      osm: { type:'raster', tiles:['https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+             'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize:256,
+             attribution:'© OpenStreetMap' }
+    },
+    layers: [{ id:'osm', type:'raster', source:'osm' }]
+  },
+  center: [101.2845, 6.547], zoom: 14.2, pitch: 58, bearing: -22, maxZoom: 19
+});
+map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'top-right');
+map.addControl(new maplibregl.AttributionControl({ compact:true }), 'bottom-left');
+
+// เมื่อฝังใน iframe/modal: container อาจเริ่มที่ขนาด 0 แล้วค่อยได้ขนาดจริง
+// ResizeObserver สั่ง map.resize() ให้เรนเดอร์ใหม่เมื่อกล่องมีขนาด (modal เปิด)
+try { new ResizeObserver(function () { map.resize(); }).observe(document.getElementById('map')); } catch (e) {}
+
+const HEIGHT_COLOR = ['interpolate',['linear'],['get','height'],
+  6,'#cfe8ff', 9,'#9ec9f0', 12,'#f6c66b', 16,'#ef8e4d', 24,'#d6452e', 32,'#a02616'];
+
+let _built = false;
+async function buildScene() {
+  if (_built) return; _built = true;
+
+  // ---- terrain จริง (AW3D30) → พื้น/ถนน/ตึก ตามความสูงภูมิประเทศ ----
+  if (!map.getSource('terrain-dem')) {
+    map.addSource('terrain-dem', { type:'raster-dem', tiles:['terrain/{z}/{x}/{y}.png'],
+      encoding:'terrarium', tileSize:256, minzoom:12, maxzoom:16 });
+    map.setTerrain({ source:'terrain-dem', exaggeration:1.0 });
+  }
+  if (map.setSky) map.setSky({ 'sky-color':'#bcd9f2', 'horizon-color':'#eaf2fb',
+    'fog-color':'#dce8f5', 'fog-ground-blend':0.4, 'sky-horizon-blend':0.6 });
+
+  // ---- 3D buildings ----
+  const bj = await (await fetch('data/yala_buildings.geojson')).json();
+  document.getElementById('bCount').textContent = bj.features.length.toLocaleString();
+  map.addSource('buildings', { type:'geojson', data: bj });
+  map.addLayer({
+    id:'buildings-3d', type:'fill-extrusion', source:'buildings',
+    paint:{
+      'fill-extrusion-color': HEIGHT_COLOR,
+      'fill-extrusion-height': ['get','height'],
+      'fill-extrusion-base': 0,
+      'fill-extrusion-opacity': 0.92,
+      'fill-extrusion-vertical-gradient': true
+    }
+  });
+
+  // ===== โครงสร้างระบายน้ำจริง เทศบาลนครยะลา (ฝาท่อ/สถานีสูบ/ทางน้ำ) =====
+  // วางก่อนชั้นน้ำ → เวลาน้ำท่วมจะกลบโครงสร้างเหล่านี้ได้สมจริง
+  try {
+    const [mh, pp, ww] = await Promise.all([
+      fetch('data/yala_drainage_manholes.geojson').then(r => r.json()),
+      fetch('data/yala_pump_stations.geojson').then(r => r.json()),
+      fetch('data/yala_waterways_kmz.geojson').then(r => r.json())
+    ]);
+    // ทางน้ำเทศบาล (polygon จริง)
+    map.addSource('muni-waterways', { type:'geojson', data: ww });
+    map.addLayer({ id:'muni-waterways-fill', type:'fill', source:'muni-waterways', layout:{ visibility:'none' },
+      paint:{ 'fill-color':'#38bdf8', 'fill-opacity':0.35, 'fill-outline-color':'#0369a1' } });
+    // ฝาท่อ/ตะแกรงระบายน้ำ (9,262 จุด)
+    map.addSource('manholes', { type:'geojson', data: mh });
+    map.addLayer({ id:'manholes-pt', type:'circle', source:'manholes', layout:{ visibility:'none' },
+      paint:{ 'circle-radius':['interpolate',['linear'],['zoom'],12,1.4,16,3.2,19,5],
+        'circle-color':'#f59e0b', 'circle-opacity':0.85, 'circle-stroke-width':0 } });
+    // สถานีสูบน้ำ (11 สถานี) — เปิดโดยปริยาย
+    map.addSource('pumps', { type:'geojson', data: pp });
+    map.addLayer({ id:'pumps-halo', type:'circle', source:'pumps',
+      paint:{ 'circle-radius':['interpolate',['linear'],['zoom'],12,7,16,12,19,18],
+        'circle-color':'#0ea5e9', 'circle-opacity':0.25 } });
+    map.addLayer({ id:'pumps-pt', type:'circle', source:'pumps',
+      paint:{ 'circle-radius':['interpolate',['linear'],['zoom'],12,4.5,16,7,19,10],
+        'circle-color':'#0284c7', 'circle-stroke-color':'#fff', 'circle-stroke-width':2 } });
+    document.getElementById('mhCount') && (document.getElementById('mhCount').textContent = mh.features.length.toLocaleString());
+    // popup คลิกสถานีสูบ
+    map.on('click', 'pumps-pt', e => {
+      const p = e.features[0].properties;
+      new maplibregl.Popup({ offset: 12 }).setLngLat(e.lngLat).setHTML(
+        '<b>' + (p.name || 'สถานีสูบน้ำ') + '</b><br>เครื่องสูบ: <b>' + (p.pump_count || '-') + '</b> เครื่อง' +
+        (p.pump_on != null ? ' (เปิด ' + p.pump_on + ')' : '') +
+        '<br>อัตราสูบรวม: <b>' + (p.flow_total != null ? p.flow_total : '-') + '</b> ลบ.ม./วิ' +
+        '<br>ประตูระบายน้ำ: ' + (p.gate_count || '-') + '<br>ผู้ดูแล: ' + (p.contact || '-')
+      ).addTo(map);
+    });
+    map.on('mouseenter', 'pumps-pt', () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', 'pumps-pt', () => map.getCanvas().style.cursor = '');
+    // toggle ชั้นข้อมูล
+    const vis = (id, on) => map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+    const tP = document.getElementById('togPumps'), tM = document.getElementById('togManholes'), tW = document.getElementById('togWaterways');
+    if (tP) tP.onchange = () => { vis('pumps-pt', tP.checked); vis('pumps-halo', tP.checked); };
+    if (tM) tM.onchange = () => vis('manholes-pt', tM.checked);
+    if (tW) tW.onchange = () => vis('muni-waterways-fill', tW.checked);
+  } catch (e) { console.warn('โหลดชั้นโครงสร้างระบายน้ำไม่ได้', e); }
+
+  // ===== โมเดลน้ำท่วม interactive + ผิวน้ำ 3D cinematic =====
+  // ปรับ ฝน/แม่น้ำ/เขื่อน → คำนวณ "ระดับน้ำ (stage)" → connectivity-flood บน DEM 30 ม.จริง
+  // ความลึกคำนวณใน shader จาก u_stage เดียว → ลื่นมาก · depth-test กับตึก → น้ำหุ้มโคนตึก
+  try {
+    const G = await (await fetch('data/dem_grid.json')).json();
+    const NC = G.ncols, NR = G.nrows, N = NC*NR;
+    const ground = Float32Array.from(G.ground_m);
+    const M2 = maplibregl.MercatorCoordinate.fromLngLat({lng:101.285,lat:6.547},0).meterInMercatorCoordinateUnits();
+
+    // --- ข้อมูลโครงสร้างระบายน้ำจริง (scripts/build_drainage_grid.py) ---
+    // channel = ทางน้ำจริง (ต้นทางการไหล) · drainM = ความจุระบาย (สูบ+ฝาท่อ) เป็นเมตร
+    const channelSet = new Uint8Array(N);
+    if (G.channel) for (const i of G.channel) channelSet[i] = 1;
+    const drainM = new Float32Array(N);
+    if (G.drain_cm) for (let i=0;i<N;i++) drainM[i] = (G.drain_cm[i]||0)/100;
+
+    // --- Priority-Flood (minimax): arrival[cell] = ระดับน้ำต่ำสุดที่เซลล์เชื่อมแม่น้ำ ---
+    const arrival = new Float32Array(N).fill(Infinity);
+    const sortedG = Float32Array.from(ground).sort();
+    const baseStage = sortedG[Math.floor(N*0.012)];   // ก้นแม่น้ำ (เริ่มต้น)
+    const seedLevel = sortedG[Math.floor(N*0.03)];    // เซลล์ต่ำสุด = แหล่งน้ำ/แม่น้ำ
+    // ระดับสูงสุดของสไลเดอร์ = ระดับน้ำที่ calibrate กับเหตุการณ์จริง (ดาวเทียม GISTDA) ถ้ามี
+    let stageHi = sortedG[Math.floor(N*0.45)];
+    try { const cal = await (await fetch('data/calibration_nov2568.json')).json();
+      if (cal && cal.calibrated_stage_m) stageHi = cal.calibrated_stage_m; } catch (e) {}
+
+    // --- โมเดลตอบสนอง: input→ระดับน้ำ + เกณฑ์เริ่มท่วม (scripts/flood_response.py) ---
+    // ผูกกับเกณฑ์จริง: แม่น้ำ 75%=ล้นตลิ่ง+14ม.รทก · เหตุการณ์ พ.ย.2568 · ฝน30 · เขื่อน90
+    let FR = null;
+    try { FR = await (await fetch('data/flood_response.json')).json(); } catch (e) {}
+    const frBase  = FR ? FR.base_stage_m  : baseStage;
+    const frOnset = FR ? FR.onset_stage_m : baseStage + 1.25;
+    const onsetRise = frOnset - frBase;
+    const M = FR ? FR.mapping : { river_bankfull_pct:75, river_extra_m:2.3, rain_max_m:0.9, dam_max_m:0.66, dam_onset_pct:70 };
+    const eventRise = FR ? FR.event_rise_m : (stageHi - frBase);
+    // ส่วนยกระดับน้ำจากแต่ละตัวขับ (เมตร เหนือก้นแม่น้ำ)
+    const riseRiver = p => { p=Math.max(0,Math.min(100,p));
+      return p<=M.river_bankfull_pct ? onsetRise*(p/M.river_bankfull_pct)
+        : onsetRise + (p-M.river_bankfull_pct)/(100-M.river_bankfull_pct)*M.river_extra_m; };
+    const riseRain = mm => M.rain_max_m * Math.pow(Math.min(1,Math.max(0,mm)/100), 0.85);
+    const riseDam  = p  => p<=M.dam_onset_pct ? 0 : M.dam_max_m*(p-M.dam_onset_pct)/(100-M.dam_onset_pct);
+    const stageOf  = (rain,river,dam) => Math.min(frBase + riseRiver(river) + riseRain(rain) + riseDam(dam), frBase + eventRise + 0.5);
+    // เกณฑ์เริ่มท่วมของ "ตัวขับหนึ่ง" เมื่อตรึงอีกสองตัวตามค่าปัจจุบัน (invert)
+    function thresholdFor(driver, rain, river, dam){
+      for(let v=0; v<=200; v+=0.5){
+        const a={rain,river,dam}; a[driver]=v;
+        if(stageOf(a.rain,a.river,a.dam) >= frOnset-1e-6) return v;
+      }
+      return null;
+    }
+    const hk=[], hv=[];
+    const hpush=(k,v)=>{let i=hk.length;hk.push(k);hv.push(v);while(i>0){const p=(i-1)>>1;if(hk[p]<=hk[i])break;const a=hk[p];hk[p]=hk[i];hk[i]=a;const b=hv[p];hv[p]=hv[i];hv[i]=b;i=p;}};
+    const hpop=()=>{const tv=hv[0],n=hk.length-1;hk[0]=hk[n];hv[0]=hv[n];hk.pop();hv.pop();let i=0;while(true){const l=2*i+1,r=l+1;let s=i;if(l<hk.length&&hk[l]<hk[s])s=l;if(r<hk.length&&hk[r]<hk[s])s=r;if(s===i)break;const a=hk[s];hk[s]=hk[i];hk[i]=a;const b=hv[s];hv[s]=hv[i];hv[i]=b;i=s;}return tv;};
+    // seed การไหลจาก "ทางน้ำจริง" (channel) + เซลล์ต่ำสุด → น้ำขึ้นจากแม่น้ำ/คลองจริง
+    for(let i=0;i<N;i++){ if(channelSet[i] || ground[i]<=seedLevel){ arrival[i]=ground[i]; hpush(ground[i],i); } }
+    const DXp=[-1,1,0,0], DYp=[0,0,-1,1];
+    while(hk.length){ const cur=hpop(), ca=arrival[cur], r=(cur/NC)|0, c=cur%NC;
+      for(let d=0;d<4;d++){ const rr=r+DYp[d], cc=c+DXp[d]; if(rr<0||cc<0||rr>=NR||cc>=NC)continue;
+        const ni=rr*NC+cc, a=ca>ground[ni]?ca:ground[ni]; if(a<arrival[ni]){ arrival[ni]=a; hpush(a,ni); } } }
+
+    // --- mesh (vertex = ศูนย์กลางเซลล์) ---
+    const positions=new Float32Array(N*2), uvs=new Float32Array(N*2), grounds=new Float32Array(N), arrs=new Float32Array(N), drains=new Float32Array(N);
+    for(let r=0;r<NR;r++) for(let c=0;c<NC;c++){
+      const i=r*NC+c, lng=G.origin_lon+(c+0.5)*G.dlon, lat=G.origin_lat-(r+0.5)*G.dlat;
+      const p=maplibregl.MercatorCoordinate.fromLngLat({lng,lat},0);
+      positions[i*2]=p.x; positions[i*2+1]=p.y; uvs[i*2]=(c+0.5)/NC; uvs[i*2+1]=(r+0.5)/NR;
+      grounds[i]=ground[i]; arrs[i]=isFinite(arrival[i])?arrival[i]:99999; drains[i]=drainM[i];
+    }
+    const idx=[];
+    for(let r=0;r<NR-1;r++) for(let c=0;c<NC-1;c++){ const a=r*NC+c,b=a+1,d=(r+1)*NC+c,e=d+1; idx.push(a,b,d,b,e,d); }
+    const indices=new Uint32Array(idx);   // > 65535 vertices → ต้องใช้ UNSIGNED_INT (WebGL2)
+
+    const VS=`attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;attribute float a_arr;attribute float a_drain;
+    uniform mat4 u_matrix;uniform float u_time;uniform float u_m2;uniform float u_stage;
+    varying float v_depth;varying vec3 v_n;varying vec2 v_uv;
+    void main(){
+      /* connectivity flood − ความจุระบาย (สูบ+ฝาท่อ) → ย่านระบายดีท่วมตื้น & ลดก่อน */
+      float depth=(a_arr<=u_stage)?max(0.0,u_stage-a_ground-a_drain):0.0;
+      float amp=clamp(depth*2.0,0.0,1.0);    /* คลื่นเล็กลงเมื่อน้ำตื้น → กันกะพริบขอบ */
+      vec2 g=a_uv*48.0; /* swell กว้าง (ความถี่ต่ำ) → คลื่นไหลเนียนลื่น ไม่กระตุก */
+      vec2 d1=vec2(0.30,0.95),d2=vec2(0.82,0.28),d3=vec2(-0.55,0.70);
+      /* เคลื่อนช้า + harmonic ต่อเนื่อง → น้ำไหลนุ่มแบบในคลิป */
+      float p1=dot(g,d1)+u_time*0.72;float p2=dot(g,d2)*1.5+u_time*0.50;float p3=dot(g,d3)*2.2+u_time*0.92;
+      float w=0.038*sin(p1)+0.022*sin(p2)+0.012*sin(p3);
+      vec2 gr=0.038*cos(p1)*d1+0.022*cos(p2)*d2*1.5+0.012*cos(p3)*d3*2.2;
+      float surf=max(depth+w*amp,0.02);      /* ผิวน้ำไม่ต่ำกว่าพื้น → ไม่ z-fight */
+      v_n=normalize(vec3(-gr*amp,1.0));v_depth=depth;v_uv=a_uv;
+      float z=(a_ground+surf)*u_m2;gl_Position=u_matrix*vec4(a_pos,z,1.0);}`;
+    const FS=`precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;uniform float u_time;
+    void main(){if(v_depth<0.03)discard;float dn=clamp(v_depth/2.5,0.0,1.0);
+    vec3 col=mix(vec3(0.32,0.64,0.82),vec3(0.02,0.18,0.42),dn);   /* สีเดิม: ฟ้า→กรมท่า */
+    vec3 N=normalize(v_n),V=vec3(0.0,0.0,1.0),L=normalize(vec3(0.55,0.35,0.78)),H=normalize(L+V);
+    float spec=pow(max(dot(N,H),0.0),55.0);float fres=pow(1.0-max(dot(N,V),0.0),4.0);
+    col=mix(col,vec3(0.62,0.80,0.95),fres*0.55);
+    col+=vec3(1.0,0.97,0.85)*spec*0.7;
+    float foam=(1.0-smoothstep(0.03,0.35,v_depth))*0.55;
+    col=mix(col,vec3(0.92,0.97,1.0),foam*0.6);
+    float a=mix(0.42,0.9,dn)+spec*0.35+foam*0.25;gl_FragColor=vec4(col,clamp(a,0.0,0.96));}`;
+
+    let prog,aPos,aUv,aGnd,aArr,aDrn,uMat,uTime,uM2,uStage,posB,uvB,gndB,arrB,drnB,idxB,vao;
+    const t0=performance.now();
+    let stage=baseStage, target=baseStage, pgr=0, pgrFrom=0, pgrTo=0, playStart=0, playing=false, visible=false, lastStat=0;
+    const PLAY_MS=9000;   // เวลาเล่นน้ำขึ้นเต็มไทม์ไลน์
+
+    const waterLayer = {
+      id:'water3d-gl', type:'custom', renderingMode:'3d',
+      onAdd(_map, gl){
+        const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+          if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error('water shader:',gl.getShaderInfoLog(o));return o;};
+        prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+        if(!gl.getProgramParameter(prog,gl.LINK_STATUS))console.error('water link:',gl.getProgramInfoLog(prog));
+        aPos=gl.getAttribLocation(prog,'a_pos');aUv=gl.getAttribLocation(prog,'a_uv');
+        aGnd=gl.getAttribLocation(prog,'a_ground');aArr=gl.getAttribLocation(prog,'a_arr');aDrn=gl.getAttribLocation(prog,'a_drain');
+        uMat=gl.getUniformLocation(prog,'u_matrix');uTime=gl.getUniformLocation(prog,'u_time');
+        uM2=gl.getUniformLocation(prog,'u_m2');uStage=gl.getUniformLocation(prog,'u_stage');
+        posB=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,posB);gl.bufferData(gl.ARRAY_BUFFER,positions,gl.STATIC_DRAW);
+        uvB=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,uvB);gl.bufferData(gl.ARRAY_BUFFER,uvs,gl.STATIC_DRAW);
+        gndB=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,gndB);gl.bufferData(gl.ARRAY_BUFFER,grounds,gl.STATIC_DRAW);
+        arrB=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,arrB);gl.bufferData(gl.ARRAY_BUFFER,arrs,gl.STATIC_DRAW);
+        drnB=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,drnB);gl.bufferData(gl.ARRAY_BUFFER,drains,gl.STATIC_DRAW);
+        idxB=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,idxB);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,indices,gl.STATIC_DRAW);
+        vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER,posB); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos,2,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,uvB); gl.enableVertexAttribArray(aUv); gl.vertexAttribPointer(aUv,2,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,gndB); gl.enableVertexAttribArray(aGnd); gl.vertexAttribPointer(aGnd,1,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,arrB); gl.enableVertexAttribArray(aArr); gl.vertexAttribPointer(aArr,1,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ARRAY_BUFFER,drnB); gl.enableVertexAttribArray(aDrn); gl.vertexAttribPointer(aDrn,1,gl.FLOAT,false,0,0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,idxB);
+        gl.bindVertexArray(null);
+      },
+      render(gl, mtxArg){
+        if(!visible) return;
+        const mtx = (mtxArg && mtxArg.defaultProjectionData) ? mtxArg.defaultProjectionData.mainMatrix : mtxArg;
+        const now=performance.now();
+        if(playing){ const k=Math.min(1,(now-playStart)/PLAY_MS);
+          pgr=pgrFrom+(pgrTo-pgrFrom)*k;
+          if(k>=1){ playing=false; pgr=pgrTo; tlPlayUI(false); if(pgr<=0.001) visible=false; } }
+        stage=baseStage+pgr*(target-baseStage);
+        gl.useProgram(prog);
+        gl.uniformMatrix4fv(uMat,false,mtx); gl.uniform1f(uTime,(now-t0)/1000); gl.uniform1f(uM2,M2); gl.uniform1f(uStage,stage);
+        gl.bindVertexArray(vao);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false);
+        gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-1.0,-1.0);  // ดึงน้ำมาหน้าเล็กน้อย กัน z-fight
+        gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_INT, 0);
+        gl.disable(gl.POLYGON_OFFSET_FILL);
+        gl.depthMask(true); gl.bindVertexArray(null);
+        if(now-lastStat>140){ lastStat=now; updateStats(); }
+        if(visible) map.triggerRepaint();   // ผิวน้ำเคลื่อนไหว/ไต่ระดับต่อเนื่อง
+      }
+    };
+    map.addLayer(waterLayer);
+
+    // --- สถิติผล (พื้นที่ท่วม / ความลึก) + คำตัดสิน "ท่วม/ไม่ท่วม" จาก stage ปัจจุบัน ---
+    const elPct=document.getElementById('oPct'), elDep=document.getElementById('oDep');
+    const elVer=document.getElementById('verdict'), elVText=document.getElementById('vText'), elVThr=document.getElementById('vThr');
+    const HB=new Int32Array(130);   // histogram ความลึก 0.1 ม./บิน
+    function updateStats(){
+      HB.fill(0); let wet=0, land=0;
+      for(let i=0;i<N;i++){ if(arrs[i]<=stage){ const d=stage-grounds[i]-drainM[i]; if(d>0.03){ wet++;  // หักความจุระบาย
+        if(arrs[i]>baseStage+0.3){ land++; let b=(d*10)|0; if(b>129)b=129; HB[b]++; } } } }  // เฉพาะน้ำบนพื้นดิน (ตัดร่องแม่น้ำ)
+      let cum=0, med=0; const tgt=land*0.5;   // median = ลึกทั่วไปของพื้นที่ท่วม
+      for(let b=0;b<130;b++){ cum+=HB[b]; if(cum>=tgt){ med=b/10; break; } }
+      const landPct=100*land/N;
+      if(elPct) elPct.textContent=(100*wet/N).toFixed(1);
+      if(elDep) elDep.textContent=med.toFixed(2);
+      if(tlSld && playing) tlSld.value=(pgr*100).toFixed(0);
+      if(tlPct) tlPct.textContent=Math.round(pgr*100)+'%';
+      updateVerdict(stage, landPct, med);
+    }
+
+    // --- คำตัดสิน: ระดับน้ำปัจจุบันเทียบ "เกณฑ์เริ่มท่วม (onset)" ---
+    function updateVerdict(st, landPct, med){
+      if(!elVer) return;
+      const sR=document.getElementById('sRain'), sV=document.getElementById('sRiver'), sD=document.getElementById('sDam');
+      const rain=+(sR?sR.value:0), river=+(sV?sV.value:0), dam=+(sD?sD.value:0);
+      const margin=st-frOnset;
+      if(margin>=0){   // ===== ท่วมแล้ว =====
+        const sev = landPct>=12 ? 'รุนแรง' : (landPct>=4 ? 'ปานกลาง' : 'เริ่มท่วม');
+        elVer.className='verdict v-flood';
+        elVText.innerHTML='น้ำท่วม ('+sev+') — ลึกทั่วไป <b>'+med.toFixed(2)+' ม.</b>';
+        elVThr.innerHTML='เกินเกณฑ์เริ่มท่วมมา <b>'+margin.toFixed(2)+' ม.</b> · ระดับน้ำในเมือง ~<b>+'+st.toFixed(1)+' ม.รทก</b>';
+      } else {         // ===== ยังไม่ท่วม → บอกว่าต้องถึงเท่าไหร่ =====
+        const near = margin>-0.4;
+        elVer.className='verdict '+(near?'v-watch':'v-safe');
+        elVText.innerHTML=(near?'เฝ้าระวัง — ใกล้ท่วม':'ยังไม่ท่วม')+' (อีก <b>'+(-margin).toFixed(2)+' ม.</b> ถึงเกณฑ์)';
+        const tR=thresholdFor('river',rain,river,dam), tN=thresholdFor('rain',rain,river,dam), tD=thresholdFor('dam',rain,river,dam);
+        const parts=[];
+        if(tR!=null && tR<=100) parts.push('แม่น้ำ ≥ <b>'+Math.round(tR)+'%</b>');
+        if(tN!=null && tN<=200) parts.push('ฝน ≥ <b>'+Math.round(tN)+' มม./ชม.</b>');
+        if(tD!=null && tD<=100) parts.push('เขื่อน ≥ <b>'+Math.round(tD)+'%</b>');
+        elVThr.innerHTML = parts.length ? ('เริ่มท่วมเมื่อ (ที่ค่าอื่นปัจจุบัน): '+parts.join(' หรือ ')) : '';
+      }
+    }
+
+    // --- map ค่าสไลเดอร์ → ระดับน้ำเป้าหมาย (ผูกเกณฑ์กายภาพจริง · flood_response.py) ---
+    let simHours3d = 24;   // ระยะเวลาจำลอง (24ชม=ค่าตรง · นานขึ้น=ดันระดับน้ำขึ้นเล็กน้อย เหมือน 2D)
+    function targetStage(rain, river, dam){
+      return stageOf(rain, river, dam) + (simHours3d/24 - 1) * 0.25 * (frOnset - frBase);
+    }
+    function updateRiverBox3d(pct){
+      pct = Math.round(pct);
+      const bar=document.getElementById('rb3dBar'), lab=document.getElementById('rb3dLevel');
+      if(bar) bar.style.width = pct + '%';
+      const l = pct<42?'ต่ำ — ปลอดภัย':pct<65?'ปกติ':pct<82?'สูงกว่าปกติ':pct<93?'ใกล้ระดับวิกฤต ⚠':'ล้นตลิ่ง ⚠';
+      if(lab) lab.textContent = l + ' (' + pct + '%)';
+    }
+    // --- UI สไลเดอร์ + ปุ่ม + ไทม์ไลน์ ---
+    const sRain=document.getElementById('sRain'), sRiver=document.getElementById('sRiver'), sDam=document.getElementById('sDam');
+    const vRain=document.getElementById('vRain'), vRiver=document.getElementById('vRiver'), vDam=document.getElementById('vDam');
+    // ค้นเส้นโค้งตอบสนอง → ประเมิน พื้นที่ท่วม%/ลึก ของ "ค่าเป้าหมาย" (ไม่ต้องรอเล่นน้ำ)
+    function curveAt(st){
+      const cv=FR&&FR.curve; if(!cv||!cv.length) return {land_pct:0,depth_median:0};
+      if(st<=cv[0].stage) return cv[0];
+      for(let i=1;i<cv.length;i++){ if(st<=cv[i].stage){ const lo=cv[i-1],hi=cv[i],
+        t=(st-lo.stage)/(hi.stage-lo.stage+1e-9);
+        return {land_pct:lo.land_pct+(hi.land_pct-lo.land_pct)*t, depth_median:lo.depth_median+(hi.depth_median-lo.depth_median)*t}; } }
+      return cv[cv.length-1];
+    }
+    // แสดงคำตัดสินของ "ค่าที่ตั้งไว้" ทันทีเมื่อปรับสไลเดอร์ (พรีวิวก่อนกดจำลอง)
+    function previewVerdict(){
+      if(playing||visible) return;   // ระหว่างเล่นน้ำ ให้ updateStats คุมแทน
+      const st=targetStage(+sRain.value,+sRiver.value,+sDam.value), c=curveAt(st);
+      updateVerdict(st, c.land_pct, c.depth_median);
+    }
+    // ===== แชร์ค่ากับหน้า 2D ผ่าน localStorage =====
+    const saveSimState=()=>{ try{ localStorage.setItem('yalaSim', JSON.stringify({
+      rain:+sRain.value, river:+sRiver.value, dam:+sDam.value })); }catch(e){} };
+    let restored=null;
+    try{ restored=JSON.parse(localStorage.getItem('yalaSim')||'null'); }catch(e){}
+    if(restored){
+      if(restored.rain !=null) sRain.value =restored.rain;
+      if(restored.river!=null) sRiver.value=restored.river;
+      if(restored.dam  !=null) sDam.value  =restored.dam;
+    }
+    const sync=()=>{ vRain.textContent=sRain.value; vRiver.textContent=sRiver.value; vDam.textContent=sDam.value; updateRiverBox3d(+sRiver.value); previewVerdict(); saveSimState(); };
+    [sRain,sRiver,sDam].forEach(s=>s&&s.addEventListener('input',sync)); sync();
+    // ปุ่มระยะเวลาจำลอง (เหมือน 2D)
+    document.querySelectorAll('#durGroup3d .btn-sim-duration').forEach(b=>{
+      b.onclick=()=>{ document.querySelectorAll('#durGroup3d .btn-sim-duration').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active'); simHours3d=+b.dataset.hours; previewVerdict(); };
+    });
+    const bSim=document.getElementById('bSim'), bReset=document.getElementById('bReset2');
+    const tlPlay=document.getElementById('tlPlay'), tlSld=document.getElementById('tlSld'), tlPct=document.getElementById('tlPct');
+    const tlIco=tlPlay?tlPlay.querySelector('i'):null, tlTxt=document.getElementById('tlPlayTxt');
+    function tlPlayUI(on){ if(tlIco)tlIco.className=on?'ti ti-player-pause':'ti ti-player-play'; if(tlTxt)tlTxt.textContent=on?'หยุด':'เล่นจำลองน้ำท่วม'; }
+
+    function startPlay(toPgr){ pgrFrom=pgr; pgrTo=toPgr; playStart=performance.now(); playing=true; visible=true;
+      tlPlayUI(true); map.triggerRepaint(); }
+    function ensureTarget(){ if(target<=baseStage+0.01) target=targetStage(+sRain.value,+sRiver.value,+sDam.value); }
+
+    if(bSim) bSim.onclick=()=>{ target=targetStage(+sRain.value,+sRiver.value,+sDam.value); pgr=0; startPlay(1); };  // จำลอง = เล่นน้ำขึ้นจาก 0
+    if(bReset) bReset.onclick=()=>{ ensureTarget(); startPlay(0); };                                              // น้ำลด = ไหลกลับลง 0
+    // ค่าจากหน้า 2D ถูกกู้คืนไว้ที่สไลเดอร์แล้ว แต่ไม่เริ่มจำลองอัตโนมัติ — ให้ผู้ใช้กด "จำลองน้ำท่วม" เอง
+    if(tlPlay) tlPlay.onclick=()=>{ if(playing){ playing=false; tlPlayUI(false); return; }
+      ensureTarget(); if(pgr>=0.999) pgr=0; startPlay(1); };
+    if(tlSld) tlSld.oninput=()=>{ playing=false; tlPlayUI(false);
+      ensureTarget(); pgr=(+tlSld.value)/100; visible=true; map.triggerRepaint(); };   // ลากดูระดับน้ำ ณ จุดต่าง ๆ
+
+    // --- ดึงข้อมูลน้ำจริง (เขื่อนบางลาง + ฝนยะลา) → ตั้งสไลเดอร์ตามค่าปัจจุบัน ---
+    // ใช้ตัวดึงข้อมูลกลางจาก live_status.js (รวม fallback หลายชั้น + แคช + ป้ายสถานะ header)
+    const bLive=document.getElementById('bLive'), liveStatus=document.getElementById('liveStatus');
+    if(bLive) bLive.onclick=async()=>{
+      bLive.disabled=true; bLive.innerHTML='<i class="ti ti-loader"></i> กำลังดึง...';
+      const rep = window.YalaLive ? await YalaLive.fetchLive() : {source:'none',data:null};
+      const dam  = rep.data ? rep.data.storage  : null;
+      const rain = rep.data ? rep.data.rainfall : null;
+      if(dam!=null){ sDam.value=Math.round(dam); sDam.dispatchEvent(new Event('input')); }
+      if(rain!=null){ sRain.value=Math.min(100,Math.max(0,Math.round(rain))); sRain.dispatchEvent(new Event('input')); }
+      const cached = rep.source==='cache';
+      const t=new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+      liveStatus.innerHTML = (dam!=null||rain!=null)
+        ? (cached?'ข้อมูลล่าสุด '+YalaLive.fmtTime(rep.ts)+' (แคช) · ':'ค่าจริง '+t+' · ')+'เขื่อน '+(dam!=null?dam.toFixed(0)+'%':'–')+' · ฝน '+(rain!=null?rain.toFixed(1)+' mm/hr':'–')+' → กด "จำลอง"'
+        : 'เชื่อมต่อ API ไม่ได้ (อาจออฟไลน์/CORS)';
+      bLive.disabled=false; bLive.innerHTML='<i class="ti ti-rss" style="font-size:13px;"></i> ดึงค่าปัจจุบันจริง';
+    };
+    // ตรวจสถานะการเชื่อมต่อตอนเปิดหน้า (อัปเดตเฉพาะป้าย header + แคช — ไม่ยุ่งกับสไลเดอร์)
+    if(window.YalaLive) YalaLive.fetchLive();
+  } catch(e){ console.warn('โมเดลน้ำ 3D ใช้ไม่ได้ (ตรวจ dem_grid.json / WebGL)', e); }
+}
+// ยิงหลายทางกัน 'load' ไม่ทำงาน (เช่นตอนฝังใน iframe/modal ที่เริ่มซ่อนอยู่)
+map.on('load', buildScene);
+map.on('idle', buildScene);
+// fallback: รอจน style พร้อมแล้วค่อยสร้าง (กันกรณี 'load'/'idle' ไม่ยิงตอนฝังใน iframe)
+(function waitStyle(n) {
+  if (_built) return;
+  if (map.isStyleLoaded()) buildScene();
+  else if (n < 80) setTimeout(function () { waitStyle(n + 1); }, 250);
+})(0);
+</script>
+</body>
+</html>
