@@ -18,7 +18,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const readJSON = (p) => JSON.parse(read(p));
 const exists = (p) => fs.existsSync(path.join(ROOT, p));
 
-const PAGES = ["index.html", "dashboard.html", "city3d.html"];
+const PAGES = ["index.html", "dashboard.html", "city3d.html", "interventions.html"];
 const SCRIPTS = ["assets/flood_analysis.js", "assets/live_status.js", "assets/lisflood_viewer.js"];
 
 // รวบรวม path ภายในที่ถูกอ้างถึง (ข้าม http, template {z}/{x}, และ data-URI)

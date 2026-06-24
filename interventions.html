@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>โครงสร้างที่ควรแก้ · ลดน้ำท่วมเมืองยะลา</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css" integrity="sha384-/Bmojb1H/9dHvtYa2TzEQ1MldjNefaS+t7DcnOYHpP+yer5gvd3LONWEpWhHK+Yo" crossorigin="anonymous">
+  <link rel="stylesheet" href="assets/styles.css">
+  <style>
+    /* การ์ดขั้นตอน */
+    .steps { list-style:none; margin:0; padding:0; counter-reset:s; }
+    .steps li { position:relative; padding:6px 0 6px 30px; font-size:12px; color:var(--ink-700); line-height:1.45; border-top:1px solid #f1f5f9; }
+    .steps li:first-child { border-top:none; }
+    .steps li::before { counter-increment:s; content:counter(s); position:absolute; left:0; top:6px;
+      width:20px; height:20px; border-radius:50%; background:#0ea5e9; color:#fff; font-size:11px;
+      font-weight:700; display:grid; place-items:center; }
+    /* รายการมาตรการจัดอันดับ */
+    .rec { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:9px; }
+    .rec-head { display:flex; align-items:center; gap:7px; margin-bottom:4px; }
+    .rec-pri { flex:0 0 auto; width:22px; height:22px; border-radius:6px; background:#0c3b6e; color:#fff;
+      font-size:12px; font-weight:700; display:grid; place-items:center; }
+    .rec-type { font-size:12px; font-weight:700; color:var(--ink-900); }
+    .rec-type.hot { color:#b91c1c; } .rec-type.bot { color:#c2410c; }
+    .rec p { margin:3px 0 0; font-size:11.5px; color:var(--ink-600); line-height:1.5; }
+    .rec .measure { color:var(--ink-900); font-weight:600; }
+    .ba { display:flex; align-items:center; gap:10px; margin:10px 0; }
+    .ba .box { flex:1; text-align:center; padding:9px; border-radius:9px; border:1px solid var(--line); }
+    .ba .box .n { font-size:22px; font-weight:700; font-family:'Inter',sans-serif; line-height:1; }
+    .ba .b0 { background:#fef2f2; } .ba .b0 .n { color:#b91c1c; }
+    .ba .b1 { background:#ecfdf5; } .ba .b1 .n { color:#047857; }
+    .ba .arr { color:var(--ink-400); font-size:18px; }
+    .legend-box { position:absolute; bottom:16px; left:14px; z-index:600; background:#fff;
+      border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow-md); padding:10px 12px; font-size:11.5px; }
+    .legend-box .row { display:flex; align-items:center; gap:7px; margin:4px 0; color:var(--ink-700); }
+    .legend-box .dot { width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div class="brand-mark"><i class="ti ti-ripple"></i></div>
+    <div class="brand-text">
+      <h1>ศูนย์เฝ้าระวังและจำลองน้ำท่วม เทศบาลนครยะลา</h1>
+      <p>YALA FLOOD GIS &middot; STRUCTURAL INTERVENTION PLANNING</p>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="header-meta">
+      <div class="view-toggle">
+        <a href="dashboard.html">🗺️ 2D</a>
+        <a href="index.html">🏙️ 3D</a>
+        <a href="interventions.html" class="active">🛠️ โครงสร้าง</a>
+      </div>
+      <span class="chip">EPSG:32647 &middot; UTM 47N</span>
+      <span class="status-pill is-connecting"><span class="status-dot"></span> <span id="statusText">กำลังเชื่อมต่อ…</span></span>
+      <span class="header-clock" id="clock">--:--:--</span>
+    </div>
+  </header>
+
+  <div class="app-main">
+    <div class="map-col">
+      <div class="map-wrap">
+        <div class="map-badge"><i class="ti ti-tools"></i> โครงสร้างที่ควรแก้เพื่อลดน้ำท่วม (screening)</div>
+        <div id="map"></div>
+        <div class="legend-box">
+          <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยงน้ำท่วม (hotspot) — ขนาด = พื้นที่</div>
+          <div class="row"><span class="dot" style="background:#ea580c"></span> คอขวดระบายน้ำ (bottleneck)</div>
+          <div class="row"><span class="dot" style="background:#2563eb"></span> แนวคันกั้นน้ำที่เสนอ (จำลองก่อน-หลัง)</div>
+          <div class="row"><span class="dot" style="background:#fca5a5"></span> เขตน้ำท่วมจริง GISTDA (อ้างอิง)</div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      <section class="card">
+        <div class="card-head"><i class="ti ti-list-check"></i><h2>วิธีวิเคราะห์</h2><span class="sub">4 ขั้น</span></div>
+        <div class="card-body">
+          <ol class="steps">
+            <li>หา <b>จุดเสี่ยง</b> — ที่ท่วมบ่อย + อาคารหนาแน่น + ตรงกับน้ำท่วมจริง GISTDA</li>
+            <li>หา <b>คอขวด</b> — จุดที่น้ำไหลมารวมมาก แต่ความจุระบายต่ำ</li>
+            <li>จับคู่ <b>มาตรการโครงสร้าง</b> (คันกั้น / สูบ / ท่อระบาย / แก้มลิง)</li>
+            <li><b>จำลองก่อน-หลัง</b> — รันโมเดลซ้ำ วัดอาคารที่ป้องกันได้</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top:14px;">
+        <div class="card-head"><i class="ti ti-building-community"></i><h2>ภาพรวม &amp; ผลจำลอง</h2></div>
+        <div class="card-body">
+          <p style="margin:0 0 8px;font-size:12px;color:var(--ink-600);line-height:1.5;">
+            เหตุการณ์ออกแบบ (ระดับ <b id="sStage">–</b> ม.รทก. · พ.ย. 2568):
+            อาคารเสี่ยงน้ำท่วม <b id="sBaseBld" style="color:#b91c1c;">–</b> หลัง</p>
+          <div id="leveeBox" style="display:none;">
+            <p style="margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--ink-900);">
+              <i class="ti ti-shield-half" style="color:#2563eb;"></i> ตัวอย่างมาตรการ: คันกั้นน้ำรอบจุดเสี่ยงอันดับ 1</p>
+            <div class="ba">
+              <div class="box b0"><div class="n" id="baBefore">–</div><div style="font-size:10.5px;color:var(--ink-500);">ก่อน (อาคารท่วม)</div></div>
+              <div class="arr"><i class="ti ti-arrow-right"></i></div>
+              <div class="box b1"><div class="n" id="baAfter">–</div><div style="font-size:10.5px;color:var(--ink-500);">หลัง</div></div>
+            </div>
+            <p style="margin:0;font-size:12px;color:#047857;font-weight:600;">ป้องกันได้ ~<span id="baProt">–</span> หลัง <span id="baPump" style="color:#b45309;font-weight:500;"></span></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top:14px;">
+        <div class="card-head"><i class="ti ti-clipboard-list"></i><h2>มาตรการที่ควรทำ (จัดลำดับ)</h2></div>
+        <div class="card-body"><div id="recList">กำลังโหลด…</div></div>
+      </section>
+
+      <div class="sim-disclaimer" style="margin:14px 0 4px;">
+        <i class="ti ti-alert-triangle"></i>
+        <span>ผลเป็นระดับ <b>screening</b> บน DEM FABDEM 30 ม. (±5 ม.) — ใช้ <b>เลือกจุด/เทียบมาตรการ</b> ได้
+          แต่การออกแบบขนาดจริง (ท่อ/บ่อ/return period) ต้องใช้ <b>HEC-RAS 2D + EPA SWMM + LiDAR</b></span>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="assets/live_status.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+  // clock
+  (function(){ var el=document.getElementById('clock'); function t(){ var d=new Date(),p=n=>String(n).padStart(2,'0'); el.textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); } t(); setInterval(t,1000); })();
+  if (window.YalaLive) YalaLive.fetchLive();
+
+  var map = L.map('map', { zoomControl:true }).setView([6.54, 101.28], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
+
+  // เขตน้ำท่วมจริง GISTDA รายตำบล (อ้างอิงเบา ๆ)
+  fetch('data/yala_flood_recurrence.geojson').then(r=>r.ok?r.json():null).then(d=>{
+    if(!d) return;
+    L.geoJSON(d, { style:f=>({ stroke:false, fillColor:'#fca5a5',
+      fillOpacity: Math.min(0.5, 0.12 + (f.properties.flood_area_pct||0)/120) }) }).addTo(map);
+  }).catch(()=>{});
+
+  var bounds = [];
+  fetch('data/intervention_candidates.geojson').then(r=>r.json()).then(fc=>{
+    fc.features.forEach(function(f){
+      var p=f.properties, g=f.geometry;
+      if(p.kind==='levee' && g.type==='Polygon'){
+        L.geoJSON(f, { style:{ color:'#2563eb', weight:2.5, dashArray:'7,5', fillColor:'#3b82f6', fillOpacity:0.08 } })
+          .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+(p.needs_pump?'<br><span style="color:#b45309">* ต้องมีสถานีสูบร่วม</span>':''))
+          .addTo(map);
+        g.coordinates[0].forEach(c=>bounds.push([c[1],c[0]]));
+      } else if(g.type==='Point'){
+        var lat=g.coordinates[1], lon=g.coordinates[0];
+        if(p.kind==='hotspot'){
+          L.circle([lat,lon], { radius:Math.max(120,p.radius_m||150), color:'#dc2626', weight:2, fillColor:'#ef4444', fillOpacity:0.18 })
+            .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+'<br>พื้นที่ ~'+esc(p.area_rai)+' ไร่').addTo(map);
+          L.marker([lat,lon]).addTo(map).bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale));
+        } else if(p.kind==='bottleneck'){
+          L.circleMarker([lat,lon], { radius:8, color:'#fff', weight:2, fillColor:'#ea580c', fillOpacity:0.95 })
+            .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)).addTo(map);
+        }
+        bounds.push([lat,lon]);
+      }
+    });
+    if(bounds.length) map.fitBounds(bounds, { padding:[50,50], maxZoom:15 });
+  }).catch(e=>console.warn('โหลด candidates ไม่ได้',e));
+
+  // summary panel
+  fetch('data/intervention_summary.json').then(r=>r.json()).then(s=>{
+    document.getElementById('sStage').textContent = s.design_stage_m;
+    document.getElementById('sBaseBld').textContent = (s.baseline_buildings_flooded||0).toLocaleString();
+    if(s.levee_demo){
+      document.getElementById('leveeBox').style.display='block';
+      document.getElementById('baBefore').textContent = s.levee_demo.before;
+      document.getElementById('baAfter').textContent = s.levee_demo.after;
+      document.getElementById('baProt').textContent = s.levee_demo.protects_buildings;
+      if(s.levee_demo.needs_pump) document.getElementById('baPump').textContent = '(ต้องมีสถานีสูบร่วม)';
+    }
+    var html = (s.recommendations||[]).map(function(r){
+      var cls = /hotspot/.test(r.type)?'hot':(/bottleneck/.test(r.type)?'bot':'');
+      var detail = r.buildings!=null ? ('อาคารโดน '+r.buildings+' หลัง · ลึก ~'+r.depth_mean_m+' ม.')
+                 : (r.drain_cm!=null ? ('ความจุระบายปัจจุบัน '+r.drain_cm+' ซม.') : '');
+      return '<div class="rec"><div class="rec-head"><span class="rec-pri">'+esc(r.priority)+'</span>'
+        + '<span class="rec-type '+cls+'">'+esc(r.type)+'</span></div>'
+        + '<p>'+esc(detail)+'</p>'
+        + '<p class="measure"><i class="ti ti-arrow-badge-right"></i> '+esc(r.measure)+'</p>'
+        + '<p>คาดผล: '+esc(r.expected)+'</p></div>';
+    }).join('');
+    document.getElementById('recList').innerHTML = html || 'ไม่มีข้อมูล';
+  }).catch(e=>{ document.getElementById('recList').textContent='โหลดสรุปไม่ได้'; });
+</script>
+</body>
+</html>
