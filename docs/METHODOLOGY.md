@@ -34,7 +34,7 @@ arrival[neighbour] = max( arrival[current], elevation[neighbour] )
 
 | ชั้นข้อมูล | แหล่ง | บทบาท |
 |-----------|------|-------|
-| DEM 30 ม. | FABDEM V1-2 (bare-earth) / AW3D30 | ภูมิประเทศหลัก |
+| DEM 30 ม. | **FABDEM V1-2** (bare-earth) — `data/output_fabdem.tif` | ภูมิประเทศหลัก |
 | ทางน้ำ (`channel`) | OSM + แม่น้ำปัตตานีตรวจสอบแล้ว | seed จุดเริ่มน้ำ |
 | ถนน | OSM | burn เป็นแนวกั้นน้ำ |
 | ระบบระบายน้ำ | เทศบาล (ฝาท่อ 9,262 · สถานีสูบ 11) | หักความจุระบาย |

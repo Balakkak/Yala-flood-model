@@ -119,7 +119,7 @@ print(f"  ความลึกบนพื้นดิน: median {depth_med:.2
 
 out = {
     "ground_truth": "GISTDA satellite flood extent (เหตุการณ์ใหญ่ พื้นที่ยะลา)",
-    "method": "connectivity-flood (Priority-Flood) บน AW3D30 30 ม.",
+    "method": "connectivity-flood (Priority-Flood) บน FABDEM 30 ม.",
     "calibrated_stage_m": S,
     "stage_above_base_m": round(S - baseStage, 2),
     "CSI": best["CSI"], "POD": best["POD"], "FAR": best["FAR"], "bias": best["bias"],

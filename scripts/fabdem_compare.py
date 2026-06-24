@@ -17,7 +17,7 @@ def crop(tif, lon0, lat0):
     r0 = round((lat0-N)/PX); r1 = round((lat0-S)/PX)
     return a[r0:r1, c0:c1]
 
-aw  = crop(os.path.join(ROOT,"data","output_AW3D30.tif"), 101.20, 6.70)
+aw  = crop(os.path.join(ROOT,"data","output_AW3D30_original.tif"), 101.20, 6.70)
 fab = crop(os.path.join(ROOT,"raw","fabdem_N06E101.tif"), 101.00, 7.00)
 aw  = np.where((aw>-500)&(aw<9000), aw, 0.0)
 fab = np.where((fab>-500)&(fab<9000), fab, 0.0)

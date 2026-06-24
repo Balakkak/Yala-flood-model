@@ -10,9 +10,9 @@ NEW="${1:-}"
 if [ -n "$NEW" ]; then
   [ -f "$NEW" ] || { echo "ไม่พบไฟล์: $NEW"; exit 1; }
   echo "→ สำรอง DEM เดิม → data/output_prev.tif"
-  cp -f data/output_AW3D30.tif data/output_prev.tif 2>/dev/null || true
+  cp -f data/output_fabdem.tif data/output_prev.tif 2>/dev/null || true
   echo "→ ใช้ DEM ใหม่: $NEW"
-  cp -f "$NEW" data/output_AW3D30.tif
+  cp -f "$NEW" data/output_fabdem.tif
 fi
 
 echo "1/4  สร้างกริด DEM (อ่าน geotransform เอง รองรับทุกความละเอียด)..."

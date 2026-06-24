@@ -1,6 +1,6 @@
 {
   "ground_truth": "GISTDA satellite flood extent (เหตุการณ์ใหญ่ พื้นที่ยะลา)",
-  "method": "connectivity-flood (Priority-Flood) บน AW3D30 30 ม.",
+  "method": "connectivity-flood (Priority-Flood) บน FABDEM 30 ม.",
   "calibrated_stage_m": 18.25,
   "stage_above_base_m": 4.25,
   "CSI": 0.179,

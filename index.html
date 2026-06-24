@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>โมเดล 3D เมืองยะลา · Yala 3D City</title>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css" integrity="sha384-/Bmojb1H/9dHvtYa2TzEQ1MldjNefaS+t7DcnOYHpP+yer5gvd3LONWEpWhHK+Yo" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/styles.css">
   <style>
     .map3d-wrap { flex: 1; position: relative; overflow: hidden; }
@@ -121,6 +121,9 @@
 
   <div class="map3d-wrap">
     <div id="map"></div>
+    <div id="err3d" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:14px 18px;border-radius:12px;font-size:13px;max-width:340px;text-align:center;box-shadow:0 8px 24px rgba(15,38,73,.18);line-height:1.5;">
+      <b>โหลดโมเดล 3D ไม่สำเร็จ</b><br>ต้องเปิดผ่าน dev server (เช่น <code>npm run dev</code>) และต้องโหลดไฟล์ DEM/อาคารได้ — ดูรายละเอียดใน console
+    </div>
 
     <div class="panel top">
       <h1><i class="ti ti-building-skyscraper"></i> โมเดล 3D เมืองยะลา</h1>
@@ -222,7 +225,7 @@
   <div id="vThr" class="vthr"></div>
   <div class="sim-disclaimer">
     <i class="ti ti-alert-triangle"></i>
-    <span>ผลเป็นระดับ <b>screening (เบื้องต้น)</b> บน DEM AW3D30 30 ม. (ความสูง ±5 ม.) — บอกลำดับท่วมก่อน-หลัง ทิศทางน้ำ และพื้นที่เสี่ยงได้ <b>ยังไม่ใช่การพยากรณ์ระดับน้ำเชิง hydrodynamic จริง</b> · ค่า % พื้นที่และความลึก calibrate กับเหตุการณ์ พ.ย. 2568</span>
+    <span>ผลเป็นระดับ <b>screening (เบื้องต้น)</b> บน DEM FABDEM 30 ม. (ความสูง ±5 ม.) — บอกลำดับท่วมก่อน-หลัง ทิศทางน้ำ และพื้นที่เสี่ยงได้ <b>ยังไม่ใช่การพยากรณ์ระดับน้ำเชิง hydrodynamic จริง</b> · ค่า % พื้นที่และความลึก calibrate กับเหตุการณ์ พ.ย. 2568</span>
   </div>
   </div><!-- /.card-body -->
 </div>
@@ -241,9 +244,11 @@
   </div>
 </div><!-- /.app -->
 
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
 <script src="assets/live_status.js"></script>
 <script>
+// escape ค่าจากข้อมูลภายนอกก่อนใส่ HTML popup — กัน XSS
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
 // เปิด/ปิดแผงจำลอง — เริ่มต้นซ่อนแผง โชว์ปุ่ม CTA (หน้าแรกสะอาด)
 (function(){
   var panel=document.getElementById('simCtrl'), cta=document.getElementById('openSim'), x=document.getElementById('closeSim');
@@ -303,7 +308,7 @@ let _built = false;
 async function buildScene() {
   if (_built) return; _built = true;
 
-  // ---- terrain จริง (AW3D30) → พื้น/ถนน/ตึก ตามความสูงภูมิประเทศ ----
+  // ---- terrain จริง (FABDEM bare-earth) → พื้น/ถนน/ตึก ตามความสูงภูมิประเทศ ----
   if (!map.getSource('terrain-dem')) {
     map.addSource('terrain-dem', { type:'raster-dem', tiles:['terrain/{z}/{x}/{y}.png'],
       encoding:'terrarium', tileSize:256, minzoom:12, maxzoom:16 });
@@ -313,7 +318,14 @@ async function buildScene() {
     'fog-color':'#dce8f5', 'fog-ground-blend':0.4, 'sky-horizon-blend':0.6 });
 
   // ---- 3D buildings ----
-  const bj = await (await fetch('data/yala_buildings.geojson')).json();
+  let bj;
+  try {
+    bj = await (await fetch('data/yala_buildings.geojson')).json();
+  } catch (err) {
+    console.error('โหลดอาคาร 3D ไม่สำเร็จ — เปิดผ่าน dev server หรือไม่?', err);
+    var ed = document.getElementById('err3d'); if (ed) ed.style.display = 'block';
+    return;
+  }
   document.getElementById('bCount').textContent = bj.features.length.toLocaleString();
   map.addSource('buildings', { type:'geojson', data: bj });
   map.addLayer({
@@ -357,10 +369,10 @@ async function buildScene() {
     map.on('click', 'pumps-pt', e => {
       const p = e.features[0].properties;
       new maplibregl.Popup({ offset: 12 }).setLngLat(e.lngLat).setHTML(
-        '<b>' + (p.name || 'สถานีสูบน้ำ') + '</b><br>เครื่องสูบ: <b>' + (p.pump_count || '-') + '</b> เครื่อง' +
-        (p.pump_on != null ? ' (เปิด ' + p.pump_on + ')' : '') +
-        '<br>อัตราสูบรวม: <b>' + (p.flow_total != null ? p.flow_total : '-') + '</b> ลบ.ม./วิ' +
-        '<br>ประตูระบายน้ำ: ' + (p.gate_count || '-') + '<br>ผู้ดูแล: ' + (p.contact || '-')
+        '<b>' + esc(p.name || 'สถานีสูบน้ำ') + '</b><br>เครื่องสูบ: <b>' + esc(p.pump_count || '-') + '</b> เครื่อง' +
+        (p.pump_on != null ? ' (เปิด ' + esc(p.pump_on) + ')' : '') +
+        '<br>อัตราสูบรวม: <b>' + (p.flow_total != null ? esc(p.flow_total) : '-') + '</b> ลบ.ม./วิ' +
+        '<br>ประตูระบายน้ำ: ' + esc(p.gate_count || '-') + '<br>ผู้ดูแล: ' + esc(p.contact || '-')
       ).addTo(map);
     });
     map.on('mouseenter', 'pumps-pt', () => map.getCanvas().style.cursor = 'pointer');

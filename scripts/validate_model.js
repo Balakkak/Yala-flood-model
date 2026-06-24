@@ -138,7 +138,7 @@ const auc2 = auc(negArr, R.map((x) => x >= 2 ? 1 : 0));
 const rho = spearman(A, R);
 const out = {
   ground_truth: "GISTDA flood layers (satellite polygons + riverbank points + official overflow lines), 0–3 agreement",
-  method: "Priority-Flood (minimax connectivity) on dem_grid.json (AW3D30 30m), seeded from real channel cells",
+  method: "Priority-Flood (minimax connectivity) on dem_grid.json (FABDEM 30m), seeded from real channel cells",
   city_cells: M,
   gistda_coverage_pct: +(M ? covered / M * 100 : 0).toFixed(1),
   auc_any: +auc1.toFixed(3),

@@ -11,8 +11,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Leaflet + app styles -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css" integrity="sha384-/Bmojb1H/9dHvtYa2TzEQ1MldjNefaS+t7DcnOYHpP+yer5gvd3LONWEpWhHK+Yo" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
@@ -190,7 +190,7 @@
           <div id="vThr" class="vthr"></div>
           <div class="sim-disclaimer">
             <i class="ti ti-alert-triangle"></i>
-            <span>ผลเป็นระดับ <b>screening (เบื้องต้น)</b> บน DEM AW3D30 30 ม. (ความสูง ±5 ม.) — บอกลำดับท่วมก่อน-หลัง ทิศทางน้ำ และพื้นที่เสี่ยงได้ <b>ยังไม่ใช่การพยากรณ์ระดับน้ำเชิง hydrodynamic จริง</b> · ค่า % พื้นที่และความลึก calibrate กับเหตุการณ์ พ.ย. 2568</span>
+            <span>ผลเป็นระดับ <b>screening (เบื้องต้น)</b> บน DEM FABDEM 30 ม. (ความสูง ±5 ม.) — บอกลำดับท่วมก่อน-หลัง ทิศทางน้ำ และพื้นที่เสี่ยงได้ <b>ยังไม่ใช่การพยากรณ์ระดับน้ำเชิง hydrodynamic จริง</b> · ค่า % พื้นที่และความลึก calibrate กับเหตุการณ์ พ.ย. 2568</span>
           </div>
 
           <!-- Simulate button -->
@@ -235,10 +235,12 @@
 </script>
 
 <!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 <!-- GeoTIFF reader (vendored locally) -->
 <script src="assets/geotiff.min.js"></script>
 <script>
+  // escape ค่าจากข้อมูลภายนอก (OSM/GISTDA) ก่อนใส่ HTML popup — กัน XSS
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
   // Live clock
   (function () {
     var el = document.getElementById('clock');
@@ -296,7 +298,7 @@
         },
         onEachFeature: function(f, l) {
           var n = f.properties.name || f.properties.kind || 'ทางน้ำ';
-          l.bindPopup('<b>' + n + '</b><br>ประเภท: ' + (f.properties.kind || '-') + '<br>ที่มา: OpenStreetMap');
+          l.bindPopup('<b>' + esc(n) + '</b><br>ประเภท: ' + esc(f.properties.kind || '-') + '<br>ที่มา: OpenStreetMap');
         }
       }).addTo(map);
       layerControl.addOverlay(layer, "แม่น้ำ / คลอง (OSM)");
@@ -316,8 +318,8 @@
         style: function(f) { return kindStyle(f.properties.kind, f.properties.source); },
         onEachFeature: function(f, l) {
           var name = f.properties.name || f.properties.label || 'ท่อ/คูระบายน้ำ';
-          l.bindPopup('<b>' + name + '</b><br>ประเภท: ' + f.properties.label + '<br>ที่มา: ' + (f.properties.source === 'osm' ? 'OpenStreetMap' : 'โครงข่ายระบายน้ำจาก DEM'));
-          l.bindTooltip(f.properties.label, { sticky: true, offset: [6, 0] });
+          l.bindPopup('<b>' + esc(name) + '</b><br>ประเภท: ' + esc(f.properties.label) + '<br>ที่มา: ' + (f.properties.source === 'osm' ? 'OpenStreetMap' : 'โครงข่ายระบายน้ำจาก DEM'));
+          l.bindTooltip(esc(f.properties.label), { sticky: true, offset: [6, 0] });
         }
       });
       layerControl.addOverlay(layer, "ท่อ/คูระบายน้ำ เทศบาล (Sewer Network)");
@@ -336,8 +338,8 @@
         },
         onEachFeature: function(f, l) {
           var p = f.properties;
-          l.bindPopup('<b>ฝาท่อ/ตะแกรงระบายน้ำ</b><br>วัสดุ: ' + (p.material || '-') +
-            '<br>ขนาด: ' + (p.w || '?') + ' × ' + (p.l || '?') + ' ม. (' + (p.shape || '-') + ')');
+          l.bindPopup('<b>ฝาท่อ/ตะแกรงระบายน้ำ</b><br>วัสดุ: ' + esc(p.material || '-') +
+            '<br>ขนาด: ' + (p.w || '?') + ' × ' + (p.l || '?') + ' ม. (' + esc(p.shape || '-') + ')');
         }
       });
       layerControl.addOverlay(layer, "ฝาท่อ/ตะแกรงระบายน้ำ (9,262 จุด)");
@@ -355,13 +357,13 @@
         },
         onEachFeature: function(f, l) {
           var p = f.properties;
-          l.bindPopup('<b>' + (p.name || 'สถานีสูบน้ำ') + '</b>' +
+          l.bindPopup('<b>' + esc(p.name || 'สถานีสูบน้ำ') + '</b>' +
             '<br>เครื่องสูบ: <b>' + (p.pump_count || '-') + '</b> เครื่อง' + (p.pump_on != null ? ' (เปิด ' + p.pump_on + ')' : '') +
             '<br>อัตราสูบรวม: <b>' + (p.flow_total != null ? p.flow_total : '-') + '</b> ลบ.ม./วิ' +
             '<br>ประตูระบายน้ำ: ' + (p.gate_count || '-') +
-            '<br>ผู้ดูแล: ' + (p.contact || '-') +
-            '<br>ซ่อมบำรุงล่าสุด: ' + (p.maintained || '-'));
-          l.bindTooltip(p.name || 'สถานีสูบน้ำ', { sticky: true, direction: 'top', offset: [0, -10] });
+            '<br>ผู้ดูแล: ' + esc(p.contact || '-') +
+            '<br>ซ่อมบำรุงล่าสุด: ' + esc(p.maintained || '-'));
+          l.bindTooltip(esc(p.name || 'สถานีสูบน้ำ'), { sticky: true, direction: 'top', offset: [0, -10] });
         }
       }).addTo(map);
       layerControl.addOverlay(layer, "สถานีสูบน้ำ (11 สถานี)");
@@ -376,7 +378,7 @@
         style: { color: '#0369a1', weight: 1, fillColor: '#38bdf8', fillOpacity: 0.35 },
         onEachFeature: function(f, l) {
           var p = f.properties;
-          l.bindPopup('<b>' + (p.name || 'ทางน้ำ') + '</b><br>ประเภท: ' + (p.wtype || '-') +
+          l.bindPopup('<b>' + esc(p.name || 'ทางน้ำ') + '</b><br>ประเภท: ' + esc(p.wtype || '-') +
             '<br>กว้าง: ' + (p.width_m || '-') + ' ม. · ยาว: ' + (p.length_m || '-') + ' ม.<br>ที่มา: เทศบาลนครยะลา');
         }
       });
@@ -418,7 +420,7 @@
         style: f => ({ stroke: true, color: '#b91c1c', weight: 0.6, fillColor: col(f.properties.flood_area_pct || 0), fillOpacity: 0.5 }),
         onEachFeature: (f, l) => {
           var p = f.properties;
-          l.bindPopup('<b>ต.' + (p.subdistrict || '') + '</b><br>'
+          l.bindPopup('<b>ต.' + esc(p.subdistrict || '') + '</b><br>'
             + 'พื้นที่เสี่ยงน้ำท่วม (GISTDA): <b>' + (p.flood_area_pct || 0) + '%</b><br>'
             + 'จุดหมู่บ้านเคยประสบอุทกภัย: ' + (p.flood_villages || 0) + ' จุด<br>'
             + '<span style="font-size:11px;color:#64748b">พื้นที่ตำบล ' + (p.area_sqkm || 0) + ' ตร.กม.</span>');
@@ -432,7 +434,7 @@
   var gistdaEventLayer = L.geoJSON(null, {
     style: function() { return { color: '#7c3aed', weight: 1.5, fillColor: '#a78bfa', fillOpacity: 0.35 }; },
     onEachFeature: function(f, l) {
-      l.bindPopup('<b>เขตน้ำท่วม GISTDA</b><br>' + (f.properties.name || 'พื้นที่น้ำท่วม') + '<br><span style="color:#7c3aed;font-size:11px;">ที่มา: GISTDA ดาวเทียม</span>');
+      l.bindPopup('<b>เขตน้ำท่วม GISTDA</b><br>' + esc(f.properties.name || 'พื้นที่น้ำท่วม') + '<br><span style="color:#7c3aed;font-size:11px;">ที่มา: GISTDA ดาวเทียม</span>');
     }
   });
   layerControl.addOverlay(gistdaEventLayer, "เขตน้ำท่วมจริง GISTDA (ดาวเทียม·เปิดครั้งแรกช้า)");
@@ -468,7 +470,7 @@
     .then(data => {
       var layer = L.geoJSON(data, {
         style: { color: '#6366f1', weight: 1.5, fill: false, dashArray: '4 3' },
-        onEachFeature: (f, l) => l.bindTooltip(f.properties.adm3_name1 || '', { sticky: true })
+        onEachFeature: (f, l) => l.bindTooltip(esc(f.properties.adm3_name1 || ''), { sticky: true })
       });
       layerControl.addOverlay(layer, "ขอบเขตตำบล (อ.เมืองยะลา)");
     })
@@ -497,7 +499,7 @@
       var riverBase = L.geoJSON(fc, {
         style: { color: '#0369a1', weight: 5, opacity: 0.85 },
         onEachFeature: function(f, l) {
-          l.bindPopup('<b>' + (f.properties.name || 'แม่น้ำหลัก') + '</b><br>แม่น้ำหลัก — ข้อมูลกรมทรัพยากรน้ำ');
+          l.bindPopup('<b>' + esc(f.properties.name || 'แม่น้ำหลัก') + '</b><br>แม่น้ำหลัก — ข้อมูลกรมทรัพยากรน้ำ');
         }
       });
 
@@ -524,8 +526,8 @@
         pointToLayer: function(f, ll) { return L.marker(ll, { icon: icon }); },
         onEachFeature: function(f, l) {
           var name = f.properties.name || 'หมู่บ้าน';
-          l.bindPopup('<b>' + name + '</b><br><span style="color:#dc2626;font-weight:600">เสี่ยงน้ำท่วม</span>');
-          l.bindTooltip(name, { sticky: true, offset: [8, 0] });
+          l.bindPopup('<b>' + esc(name) + '</b><br><span style="color:#dc2626;font-weight:600">เสี่ยงน้ำท่วม</span>');
+          l.bindTooltip(esc(name), { sticky: true, offset: [8, 0] });
         }
       });
       layerControl.addOverlay(layer, "หมู่บ้านเสี่ยงน้ำท่วม (กรมน้ำ)");
@@ -548,7 +550,7 @@
 
   // 6. DEM hillshade (GeoTIFF v2 async API)
   console.log("Loading DEM...");
-  fetch('data/output_AW3D30.tif')
+  fetch('data/output_fabdem.tif')
     .then(res => res.arrayBuffer())
     .then(buffer => GeoTIFF.fromArrayBuffer(buffer).then(tiff => tiff.getImage()))
     .then(image => {
@@ -570,7 +572,7 @@
         }
         ctx.putImageData(imageData, 0, 0);
         const demLayer = L.imageOverlay(canvas.toDataURL(),
-          [[bbox[1], bbox[0]], [bbox[3], bbox[2]]], { opacity: 0.5, attribution: 'DEM: JAXA AW3D30' });
+          [[bbox[1], bbox[0]], [bbox[3], bbox[2]]], { opacity: 0.5, attribution: 'DEM: FABDEM V1-2' });
         layerControl.addOverlay(demLayer, "ภูมิศาสตร์ (DEM hillshade)");
         console.log("✅ DEM hillshade layer added");
       });

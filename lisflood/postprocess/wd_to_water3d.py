@@ -65,7 +65,7 @@ for wf in wd_files:
 
 # ความสูงพื้นดินจริง (DEM) ราย-เซลล์ → ให้ผิวน้ำ = ดิน + ความลึก (สมจริงตามภูมิประเทศ)
 import tifffile
-DEMTIF = os.path.normpath(os.path.join(HERE, "..", "..", "data", "output_AW3D30.tif"))
+DEMTIF = os.path.normpath(os.path.join(HERE, "..", "..", "data", "output_fabdem.tif"))
 dem = tifffile.imread(DEMTIF).astype(np.float64)        # (NR,NC) row0=เหนือ ตรงกับกริด .wd
 dem = np.where((dem > -500) & (dem < 9000), dem, 0.0)
 ground_ds = block_max(dem[r0:r1, c0:c1].copy(), FACTOR) # ใช้ max ให้เข้ากับ depth (กันน้ำโผล่ใต้ดิน)
