@@ -59,6 +59,29 @@
   // --- Long-run duration ---
   let simLongRunHours = 24;
 
+  /* ======================================================================
+   *  CALIBRATION & MODEL CONSTANTS — รวมศูนย์ + อ้างอิงที่มา (ดู docs/METHODOLOGY.md)
+   *  ค่าเหล่านี้คือ "พารามิเตอร์ที่ปรับเทียบด้วยมือ" ของโมเดล screening
+   *  เปลี่ยนที่นี่ที่เดียว แทนการฝังตัวเลขกระจายในโค้ด
+   * ====================================================================== */
+
+  // เกณฑ์เตือนภัยน้ำ (อ้างอิง AAR เหตุการณ์ พ.ย. 2568 + City Digital Data Platform ยะลา)
+  const FLOOD_THRESHOLDS = {
+    RELEASE_MCM:  200,  // เขื่อนบางลางระบาย m³/s → เสี่ยงท่วมท้ายน้ำ (ปกติ <50)
+    STORAGE_PCT:  90,   // % ความจุเขื่อน → เสี่ยงล้น
+    INFLOW_MCM:   500,  // น้ำไหลเข้า m³/s → แรงดันต้นน้ำ
+    RAIN_MMH:     30,   // ฝนในเมือง mm/hr → เสี่ยงน้ำท่วมฉับพลัน
+  };
+
+  // ประเมินน้ำท่า (Rational method): Q = C·I·A/3.6  [m³/s]
+  //   C = สัมประสิทธิ์น้ำท่า (เมืองกึ่งปิดผิว), A = พื้นที่ลุ่มน้ำเมืองยะลา ~21 km²
+  const RUNOFF = { C: 0.75, AREA_KM2: 21 };
+  const runoffCms = (rainMmH) => (RUNOFF.C * rainMmH * RUNOFF.AREA_KM2) / 3.6;
+
+  // ตัวคูณตามระยะเวลาจำลอง (24ชม.=1× · ยิ่งนานน้ำยิ่งแผ่/สูงขึ้นเล็กน้อย)
+  //   tMult = simLongRunHours/24 ; ผลกระทบต่อ stage/พื้นที่/ความลึกใช้ gain ต่างกัน
+  const DURATION = { STAGE_GAIN: 0.25, PCT_GAIN: 0.25, DEPTH_GAIN: 0.18 };
+
   // --- ค่าคงที่การประมวลผล ---
   const TARGET_DIM = 560; // ขนาดกริดเป้าหมายหลัง downsample (ด้านยาว)
   const ARROW_SCALE = 2;  // ความละเอียดของเลเยอร์ลูกศร (เท่าของกริด)
@@ -507,15 +530,15 @@
     // ===== ระดับน้ำ (stage) จากสูตรเดียวกับ 3D — 24 ชม. = ตรงกับ 3D เป๊ะ · นานขึ้น = สูงขึ้นเล็กน้อย =====
     const st0 = frStageOf(simInputs.rainfall, simInputs.river, (simInputs.damLevel != null ? simInputs.damLevel : 50));
     if (st0 != null && FR) {
-      customStage = st0 + (tMult - 1) * 0.25 * (frOnset - frBase);   // 24h → +0
+      customStage = st0 + (tMult - 1) * DURATION.STAGE_GAIN * (frOnset - frBase);   // 24h → +0
       const cv = frCurveAt(customStage);
       SCENARIOS.custom.pct      = Math.min(0.95, Math.max(0, (cv ? cv.land_pct : 0) / 100));
       SCENARIOS.custom.depthRef = Math.max(0.05, cv ? cv.depth_p95 : 0.3);
       SCENARIOS.custom.name     = scenarioNameForStage(customStage);
     } else {   // fallback ถ้ายังโหลด flood_response ไม่เสร็จ
       customStage = 0;
-      SCENARIOS.custom.pct      = Math.min(0.92, (0.15 + intensity * 0.70) * (1 + (tMult - 1) * 0.25));
-      SCENARIOS.custom.depthRef = Math.min(2.8,  (0.30 + intensity * 1.70) * (1 + (tMult - 1) * 0.18));
+      SCENARIOS.custom.pct      = Math.min(0.92, (0.15 + intensity * 0.70) * (1 + (tMult - 1) * DURATION.PCT_GAIN));
+      SCENARIOS.custom.depthRef = Math.min(2.8,  (0.30 + intensity * 1.70) * (1 + (tMult - 1) * DURATION.DEPTH_GAIN));
       SCENARIOS.custom.name     = scenarioNameForIntensity(intensity);
     }
 
@@ -551,7 +574,7 @@
     const tMult = simLongRunHours / 24;
     const st0 = frStageOf(simInputs.rainfall, simInputs.river, (simInputs.damLevel != null ? simInputs.damLevel : 50));
     if (st0 == null) return;
-    customStage = st0 + (tMult - 1) * 0.25 * (frOnset - frBase);
+    customStage = st0 + (tMult - 1) * DURATION.STAGE_GAIN * (frOnset - frBase);
     const cv = frCurveAt(customStage);
     SCENARIOS.custom.pct      = Math.min(0.95, Math.max(0, (cv ? cv.land_pct : 0) / 100));
     SCENARIOS.custom.depthRef = Math.max(0.05, cv ? cv.depth_p95 : 0.3);
@@ -1089,13 +1112,7 @@
    * Vite proxies /api-thaiwater-v3/* → https://api-v3.thaiwater.net/*
    * ----------------------------------------------------------------------- */
 
-  // Flood alert thresholds for Yala city (from AAR 2568)
-  const FLOOD_THRESHOLDS = {
-    RELEASE_MCM:  200,  // m³/s released → downstream flood risk (เขื่อนบางลางปกติ <50 m³/s)
-    STORAGE_PCT:  90,   // % full → overflow risk
-    INFLOW_MCM:   500,  // m³/s inflow → upstream pressure
-    RAIN_MMH:     30,   // mm/hr rainfall in Yala → urban flash flood risk
-  };
+  // (FLOOD_THRESHOLDS ย้ายไปรวมที่บล็อก CALIBRATION ด้านบนแล้ว)
 
   const fetchMockBtn = document.getElementById("fetchMockBtn");
   const fetchStatus  = document.getElementById("fetchStatus");
@@ -1125,8 +1142,8 @@
     // Fix 4: rainfall + runoff estimate
     if (rainfallEl && latestRainfall !== null) {
       // Rational formula: Q = C×I×A/3.6 — พื้นที่เมืองยะลา ~21 km², C=0.75
-      const runoffCms = (0.75 * latestRainfall * 21) / 3.6;
-      rainfallEl.textContent = latestRainfall.toFixed(1) + ' (น้ำท่า ~' + runoffCms.toFixed(0) + ' m³/s)';
+      const q = runoffCms(latestRainfall);
+      rainfallEl.textContent = latestRainfall.toFixed(1) + " (น้ำท่า ~" + q.toFixed(0) + ' m³/s)';
     } else if (rainfallEl) { rainfallEl.textContent = '--'; }
     if (fetchData)    fetchData.style.display  = 'grid';
 
@@ -1235,8 +1252,8 @@
     // Update rainfall display immediately (not waiting for render)
     if (rainfallEl) {
       if (rainfall !== null) {
-        const runoffCms = (0.75 * rainfall * 21) / 3.6;
-        rainfallEl.textContent = rainfall.toFixed(1) + ' (น้ำท่า ~' + runoffCms.toFixed(0) + ' m³/s)';
+        const q = runoffCms(rainfall);
+        rainfallEl.textContent = rainfall.toFixed(1) + ' (น้ำท่า ~' + q.toFixed(0) + ' m³/s)';
       } else {
         rainfallEl.textContent = '--';
       }
