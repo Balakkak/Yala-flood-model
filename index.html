@@ -41,10 +41,11 @@
       transition:opacity .25s ease, transform .25s ease; }
     .ctrl.is-hidden { opacity:0; transform:translateY(10px) scale(.98); pointer-events:none; }
     .ctrl .card-head { position:relative; padding-right:40px; }
-    .panel-close { position:absolute; top:10px; right:12px; width:24px; height:24px; border:none;
-      background:transparent; color:#94a3b8; cursor:pointer; border-radius:7px; display:grid; place-items:center; }
-    .panel-close:hover { background:#f1f5f9; color:#0c3b6e; }
-    .panel-close .ti { font-size:16px; }
+    .panel-close { position:absolute; top:9px; right:10px; width:28px; height:28px;
+      border:1px solid var(--line); background:#fff; color:#64748b; cursor:pointer; border-radius:8px;
+      display:grid; place-items:center; box-shadow:var(--shadow-sm); font-family:inherit; font-size:17px; line-height:1; padding:0; z-index:2; }
+    .panel-close:hover { background:#fef2f2; border-color:#fecaca; color:#dc2626; }
+    .panel-close .ti { font-size:17px; }
     .ctrl::-webkit-scrollbar { width:8px; }
     .ctrl::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; border:2px solid #fff; }
     /* ปุ่มเรียกแผงจำลอง (CTA) — โชว์ตอนแผงถูกซ่อน */
@@ -154,7 +155,7 @@
     <i class="ti ti-sliders"></i>
     <h2>จำลองสถานการณ์น้ำท่วม</h2>
     <span class="sub">Simulation</span>
-    <button id="closeSim" class="panel-close" title="ปิด" aria-label="ปิดแผง"><i class="ti ti-x"></i></button>
+    <button id="closeSim" class="panel-close" type="button" title="ปิด" aria-label="ปิดแผง">✕</button>
   </div>
   <div class="card-body">
   <p class="note" style="margin-bottom:13px;">ปรับค่าด้านล่างแล้วกด <b>จำลองน้ำท่วม</b> เพื่อดูพื้นที่เสี่ยงและจุดที่ควรแก้</p>

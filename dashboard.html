@@ -609,8 +609,8 @@
     if (head && !head.querySelector('.panel-close')) {
       head.style.position = 'relative'; head.style.paddingRight = '40px';
       var x = document.createElement('button');
-      x.className = 'panel-close'; x.title = 'ปิด'; x.setAttribute('aria-label', 'ปิดแผง');
-      x.innerHTML = '<i class="ti ti-x"></i>';
+      x.className = 'panel-close'; x.type = 'button'; x.title = 'ปิด'; x.setAttribute('aria-label', 'ปิดแผง');
+      x.textContent = '✕';
       x.onclick = close;
       head.appendChild(x);
     }

@@ -712,11 +712,13 @@ path.river-flow-anim {
 .cta-sim:hover { transform: translateY(-2px); box-shadow: 0 12px 26px -6px rgba(2,132,199,.7); }
 .cta-sim.is-hidden { opacity: 0; transform: translateY(10px); pointer-events: none; }
 .panel-close {
-  position: absolute; top: 10px; right: 12px; width: 24px; height: 24px; border: none;
-  background: transparent; color: var(--ink-400); cursor: pointer; border-radius: 7px; display: grid; place-items: center;
+  position: absolute; top: 9px; right: 10px; width: 28px; height: 28px;
+  border: 1px solid var(--line); background: #fff; color: var(--ink-500); cursor: pointer;
+  border-radius: 8px; display: grid; place-items: center; box-shadow: var(--shadow-sm);
+  font-family: inherit; font-size: 17px; line-height: 1; padding: 0; z-index: 2;
 }
-.panel-close:hover { background: #f1f5f9; color: #0c3b6e; }
-.panel-close .ti { font-size: 16px; }
+.panel-close:hover { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+.panel-close .ti { font-size: 17px; }
 
 /* ============================================================================
  * UX/UI Polish — micro-interactions ที่ใช้ร่วม 2D + 3D
