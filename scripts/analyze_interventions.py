@@ -280,7 +280,8 @@ def levee_for_zone(z):
     needs_pump = True
     cost = length_m * LEVEE_RATE + (PUMP_COST if needs_pump else 0)
     return {"before": before, "after": after, "protected": max(0, before - after),
-            "polygon": poly, "length_m": length_m, "needs_pump": needs_pump, "cost": cost}
+            "polygon": poly, "length_m": length_m, "needs_pump": needs_pump, "cost": cost,
+            "wall_cells": [int(i) for i in perim]}     # เซลล์ที่ยกเป็นคันกั้น (ให้ engine ฝั่งเว็บรันซ้ำ)
 
 for z in zones:
     z["levee"] = levee_for_zone(z)
@@ -364,6 +365,42 @@ json.dump(fc, open(os.path.join(D, "intervention_candidates.geojson"), "w", enco
 json.dump({"ncols": NC, "nrows": NR, "counts": [int(x) for x in bld],
            "total": int(bld.sum())},
           open(os.path.join(D, "buildings_grid.json"), "w", encoding="utf-8"))
+
+# ---------- intervention_sim.json (เปรียบเทียบก่อน-หลัง 2D/3D ในหน้าโครงสร้าง) ----------
+# เก็บ "เซลล์คันกั้น" ต่อมาตรการ ให้ engine ฝั่งเว็บยกคันแล้วรัน Priority-Flood ซ้ำเอง
+# (นิยาม depth/พื้นที่/ปริมาตร = นอกร่องน้ำจริง (channel) เพื่อให้เป็น "น้ำท่วมในเมือง" ไม่รวมร่องแม่น้ำ)
+chan_mask = np.zeros(N, dtype=bool)
+for i in channel:
+    chan_mask[i] = True
+city0 = flooded0 & ~chan_mask
+CELL_M2 = 30 * 30
+sim = {
+    "design_stage_m": DESIGN_S, "freeboard_m": FREEBOARD,
+    "ncols": NC, "nrows": NR,
+    "origin_lon": OLON, "origin_lat": OLAT, "dlon": DLON, "dlat": DLAT,
+    "baseline": {
+        "flood_cells": int(city0.sum()),
+        "buildings": int(bld[city0].sum()),
+        "area_rai": round(int(city0.sum()) * CELL_M2 / 1600),
+        "volume_m3": int((depth0[city0]).sum() * CELL_M2),
+    },
+    "levees": [
+        {
+            "rank": rank,
+            "label": f"คันกั้นรอบจุดเสี่ยงอันดับ {rank}",
+            "centroid": [round(z["lat"], 6), round(z["lon"], 6)],
+            "polygon": z["levee"]["polygon"],
+            "wall_cells": z["levee"]["wall_cells"],
+            "before": z["levee"]["before"], "after": z["levee"]["after"],
+            "protected": z["levee"]["protected"],
+            "needs_pump": z["levee"]["needs_pump"], "cost_thb": z["levee"]["cost"],
+        }
+        for rank, z in enumerate(zones, 1)
+    ],
+    "note": "depth = design_stage − arrival (Priority-Flood minimax) นอกร่องน้ำจริง · "
+            "ปริมาตรเป็นระดับ screening (ต้อง HEC-RAS 2D + SWMM เพื่อออกแบบจริง)",
+}
+json.dump(sim, open(os.path.join(D, "intervention_sim.json"), "w", encoding="utf-8"), ensure_ascii=False)
 
 # ---------- เขียน summary (จัดอันดับ + cost/benefit) ----------
 recs = []

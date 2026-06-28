@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css" integrity="sha384-/Bmojb1H/9dHvtYa2TzEQ1MldjNefaS+t7DcnOYHpP+yer5gvd3LONWEpWhHK+Yo" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/styles.css">
   <style>
@@ -43,6 +44,48 @@
       border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow-md); padding:10px 12px; font-size:11.5px; }
     .legend-box .row { display:flex; align-items:center; gap:7px; margin:4px 0; color:var(--ink-700); }
     .legend-box .dot { width:12px; height:12px; border-radius:50%; flex:0 0 auto; }
+    .legend-box .grad { width:46px; height:12px; border-radius:3px; flex:0 0 auto;
+      background:linear-gradient(90deg,#bae6fd,#38bdf8,#0c4a6e); }
+    .iv-flood { image-rendering:pixelated; image-rendering:crisp-edges; }
+    #map3d canvas { outline:none; }
+    /* มุมมอง 2D/3D */
+    .vw-toggle { position:absolute; top:14px; right:14px; z-index:620; display:flex; gap:0;
+      background:#fff; border:1px solid var(--line); border-radius:9px; overflow:hidden; box-shadow:var(--shadow-md); }
+    .vw-toggle button { border:none; background:#fff; color:var(--ink-600); font:600 12px 'Sarabun',sans-serif;
+      padding:6px 14px; cursor:pointer; }
+    .vw-toggle button.active { background:#0c3b6e; color:#fff; }
+    /* แถบสลับ ก่อน/เทียบ/หลัง + swipe */
+    .cmp-bar { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); z-index:620;
+      display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.96); border:1px solid var(--line);
+      border-radius:12px; box-shadow:var(--shadow-md); padding:8px 14px; }
+    .cmp-modes { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+    .cmp-modes button { border:none; background:#fff; color:var(--ink-600); font:600 12px 'Sarabun',sans-serif;
+      padding:5px 12px; cursor:pointer; }
+    .cmp-modes button.active { background:#0ea5e9; color:#fff; }
+    .cmp-swipe { display:flex; align-items:center; gap:8px; font:600 11px 'Sarabun',sans-serif; }
+    .cmp-swipe .lab-b { color:#b91c1c; } .cmp-swipe .lab-a { color:#047857; }
+    .cmp-swipe input[type=range] { width:150px; accent-color:#0ea5e9; cursor:ew-resize; }
+    /* ป้ายก่อน/หลังบนแผนที่ */
+    .cmp-side { position:absolute; top:54px; z-index:610; font:700 12px 'Sarabun',sans-serif;
+      padding:3px 10px; border-radius:999px; box-shadow:var(--shadow-sm); pointer-events:none; }
+    .cmp-side.b { left:14px; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+    .cmp-side.a { right:14px; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
+    /* การ์ดเปรียบเทียบ */
+    .struct-tog { display:flex; align-items:flex-start; gap:9px; padding:8px 10px; border:1px solid var(--line);
+      border-radius:10px; margin-bottom:8px; cursor:pointer; transition:border-color .15s,background .15s; }
+    .struct-tog.on { border-color:#0ea5e9; background:#f0f9ff; }
+    .struct-tog input { margin-top:2px; accent-color:#0ea5e9; flex:0 0 auto; }
+    .struct-tog .t { font-size:12px; font-weight:700; color:var(--ink-900); }
+    .struct-tog .d { font-size:10.5px; color:var(--ink-600); margin-top:2px; line-height:1.45; }
+    .cmp-stats { display:grid; grid-template-columns:1fr; gap:7px; margin-top:4px; }
+    .cmp-stat { border:1px solid var(--line); border-radius:9px; padding:7px 10px; }
+    .cmp-stat .lab { font-size:10.5px; color:var(--ink-500); display:flex; align-items:center; gap:5px; }
+    .cmp-stat .vals { display:flex; align-items:baseline; gap:7px; margin-top:2px; }
+    .cmp-stat .vb { font:700 16px 'Inter',sans-serif; color:#b91c1c; }
+    .cmp-stat .arr { color:var(--ink-400); font-size:13px; }
+    .cmp-stat .va { font:700 16px 'Inter',sans-serif; color:#047857; }
+    .cmp-stat .cut { margin-left:auto; font:700 11px 'Sarabun',sans-serif; color:#0369a1;
+      background:#e0f2fe; padding:2px 7px; border-radius:6px; }
   </style>
 </head>
 <body>
@@ -70,14 +113,32 @@
   <div class="app-main">
     <div class="map-col">
       <div class="map-wrap">
-        <div class="map-badge"><i class="ti ti-tools"></i> โครงสร้างที่ควรแก้เพื่อลดน้ำท่วม (screening)</div>
+        <div class="map-badge"><i class="ti ti-tools"></i> จำลองน้ำท่วม ก่อน–หลังสร้างโครงสร้าง</div>
         <div id="map"></div>
+        <div id="map3d" style="position:absolute;inset:0;display:none;z-index:500;"></div>
+        <div class="vw-toggle">
+          <button id="vw2d" class="active">2D</button>
+          <button id="vw3d">3D</button>
+        </div>
+        <div class="cmp-side b" id="cmpSideB">ก่อนสร้าง</div>
+        <div class="cmp-side a" id="cmpSideA" style="display:none;">หลังสร้าง</div>
+        <div class="cmp-bar">
+          <div class="cmp-modes">
+            <button id="cmpBefore">ก่อน</button>
+            <button id="cmpSwipe" class="active">เทียบ</button>
+            <button id="cmpAfter">หลัง</button>
+          </div>
+          <div class="cmp-swipe" id="cmpSwipeWrap">
+            <span class="lab-b">ก่อน</span>
+            <input type="range" id="cmpSplit" min="0" max="100" value="50">
+            <span class="lab-a">หลัง</span>
+          </div>
+        </div>
         <div class="legend-box">
-          <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยงน้ำท่วม (hotspot) — ขนาด = พื้นที่</div>
-          <div class="row"><span class="dot" style="background:#ea580c"></span> คอขวดระบายน้ำ (bottleneck)</div>
-          <div class="row"><span class="dot" style="background:#0d9488"></span> แก้มลิง/บ่อหน่วงน้ำ (retention)</div>
-          <div class="row"><span class="dot" style="background:#2563eb"></span> แนวคันกั้นน้ำที่เสนอ (จำลองก่อน-หลัง)</div>
-          <div class="row"><span class="dot" style="background:#fca5a5"></span> เขตน้ำท่วมจริง GISTDA (อ้างอิง)</div>
+          <div class="row"><span class="grad"></span> ความลึกน้ำท่วม 0 → 3 ม.</div>
+          <div class="row"><span class="dot" style="background:#34d399"></span> พื้นที่ที่ <b>หายจากน้ำท่วม</b> หลังสร้าง</div>
+          <div class="row"><span class="dot" style="background:#2563eb"></span> แนวคันกั้นที่เปิดใช้งาน</div>
+          <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยง · <span class="dot" style="background:#ea580c"></span> คอขวด · <span class="dot" style="background:#0d9488"></span> แก้มลิง</div>
         </div>
       </div>
     </div>
@@ -96,21 +157,27 @@
       </section>
 
       <section class="card" style="margin-top:14px;">
-        <div class="card-head"><i class="ti ti-building-community"></i><h2>ภาพรวม &amp; ผลจำลอง</h2></div>
+        <div class="card-head"><i class="ti ti-building-community"></i><h2>เปรียบเทียบ ก่อน–หลังสร้าง</h2><span class="sub">2D/3D</span></div>
         <div class="card-body">
-          <p style="margin:0 0 8px;font-size:12px;color:var(--ink-600);line-height:1.5;">
-            เหตุการณ์ออกแบบ (ระดับ <b id="sStage">–</b> ม.รทก. · พ.ย. 2568):
-            อาคารเสี่ยงน้ำท่วม <b id="sBaseBld" style="color:#b91c1c;">–</b> หลัง</p>
-          <div id="leveeBox" style="display:none;">
-            <p style="margin:10px 0 4px;font-size:12px;font-weight:700;color:var(--ink-900);">
-              <i class="ti ti-shield-half" style="color:#2563eb;"></i> ตัวอย่างมาตรการ: คันกั้นน้ำรอบจุดเสี่ยงอันดับ 1</p>
-            <div class="ba">
-              <div class="box b0"><div class="n" id="baBefore">–</div><div style="font-size:10.5px;color:var(--ink-500);">ก่อน (อาคารท่วม)</div></div>
-              <div class="arr"><i class="ti ti-arrow-right"></i></div>
-              <div class="box b1"><div class="n" id="baAfter">–</div><div style="font-size:10.5px;color:var(--ink-500);">หลัง</div></div>
+          <p style="margin:0 0 9px;font-size:11.5px;color:var(--ink-600);line-height:1.5;">
+            เหตุการณ์ออกแบบ ระดับ <b id="sStage">–</b> ม.รทก. (พ.ย. 2568) ·
+            เปิดมาตรการที่ต้องการ แล้วโมเดลจะรันซ้ำทันที วัดน้ำที่ลดได้</p>
+          <div id="structToggles"><div style="font-size:12px;color:var(--ink-400);">กำลังโหลดเครื่องจำลอง…</div></div>
+          <div class="cmp-stats" id="cmpStats" style="display:none;">
+            <div class="cmp-stat">
+              <div class="lab"><i class="ti ti-droplet"></i> ปริมาตรน้ำท่วม (ลบ.ม.)</div>
+              <div class="vals"><span class="vb" id="stVolB">–</span><span class="arr"><i class="ti ti-arrow-right"></i></span><span class="va" id="stVolA">–</span><span class="cut" id="stVolCut">–</span></div>
             </div>
-            <p style="margin:0;font-size:12px;color:#047857;font-weight:600;">ป้องกันได้ ~<span id="baProt">–</span> หลัง <span id="baPump" style="color:#b45309;font-weight:500;"></span></p>
+            <div class="cmp-stat">
+              <div class="lab"><i class="ti ti-map-2"></i> พื้นที่ท่วม (ไร่)</div>
+              <div class="vals"><span class="vb" id="stAreaB">–</span><span class="arr"><i class="ti ti-arrow-right"></i></span><span class="va" id="stAreaA">–</span><span class="cut" id="stAreaCut">–</span></div>
+            </div>
+            <div class="cmp-stat">
+              <div class="lab"><i class="ti ti-building"></i> อาคารถูกน้ำท่วม (หลัง)</div>
+              <div class="vals"><span class="vb" id="stBldB">–</span><span class="arr"><i class="ti ti-arrow-right"></i></span><span class="va" id="stBldA">–</span><span class="cut" id="stBldCut">–</span></div>
+            </div>
           </div>
+          <p id="cmpPump" style="margin:8px 0 0;font-size:11px;color:#b45309;line-height:1.5;display:none;"></p>
         </div>
       </section>
 
@@ -130,6 +197,10 @@
 
 <script src="assets/live_status.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
+<script src="assets/intervention_compare.js"></script>
+<script src="assets/intervention_views.js"></script>
+<script src="assets/intervention_3d.js"></script>
 <script>
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
   // clock
@@ -177,14 +248,6 @@
   // summary panel
   fetch('data/intervention_summary.json').then(r=>r.json()).then(s=>{
     document.getElementById('sStage').textContent = s.design_stage_m;
-    document.getElementById('sBaseBld').textContent = (s.baseline_buildings_flooded||0).toLocaleString();
-    if(s.levee_demo){
-      document.getElementById('leveeBox').style.display='block';
-      document.getElementById('baBefore').textContent = s.levee_demo.before;
-      document.getElementById('baAfter').textContent = s.levee_demo.after;
-      document.getElementById('baProt').textContent = s.levee_demo.protects_buildings;
-      if(s.levee_demo.needs_pump) document.getElementById('baPump').textContent = '(ต้องมีสถานีสูบร่วม)';
-    }
     var dividerShown = false;
     var html = (s.recommendations||[]).map(function(r){
       var cls = r.kind==='hotspot'?'hot':(r.kind==='bottleneck'?'bot':(r.kind==='retention'?'ret':''));
@@ -220,6 +283,14 @@
     }).join('');
     document.getElementById('recList').innerHTML = html || 'ไม่มีข้อมูล';
   }).catch(e=>{ document.getElementById('recList').textContent='โหลดสรุปไม่ได้'; });
+
+  // ===== เครื่องเปรียบเทียบ ก่อน–หลัง (2D/3D) =====
+  IVCompare.init().then(function(){ IVViews.mount(map, L); })
+    .catch(function(e){
+      console.warn('IVCompare init ไม่ได้', e);
+      var st=document.getElementById('structToggles');
+      if(st) st.innerHTML='<div style="font-size:12px;color:#b91c1c;">โหลดเครื่องจำลองไม่ได้ (ตรวจ dem_grid/intervention_sim)</div>';
+    });
 </script>
 </body>
 </html>
