@@ -15,8 +15,8 @@ window.IVCompare = (function () {
 
   var NC, NR, N, ground, valid, chanMask, inStudy, bld;
   var OLON, OLAT, DLON, DLAT, DESIGN_S, FREEBOARD, STAGE;
-  var sim, levees = [], enabled = {};
-  var baseArrival, afterArrival, statsCache;
+  var sim, levees = [], enabled = {}, FR = null;
+  var baseArrival, afterArrival, statsCache, flowCache = null;
   var split = 0.0;                 // 0 = ทั้งหมดเป็น "หลัง", 1 = ทั้งหมดเป็น "ก่อน"
   var listeners = [];
   var ready = false;
@@ -68,26 +68,51 @@ window.IVCompare = (function () {
              volume_m3: Math.round(vol * CELL_M2), buildings: Math.round(b) };
   }
 
-  function computeAfter() {
-    var elev = Float32Array.from(ground);
-    var wall = DESIGN_S + FREEBOARD;
+  // elevation ground + ยกเซลล์คันกั้นที่เปิดใช้งาน (ใช้ทั้งคำนวณ "หลัง" และสนามการไหล)
+  function elevWithLevees() {
+    var elev = Float32Array.from(ground), wall = DESIGN_S + FREEBOARD;
     for (var li = 0; li < levees.length; li++) {
       var lv = levees[li];
       if (!enabled[lv.rank]) continue;
       for (var w = 0; w < lv.wall_cells.length; w++) { var i = lv.wall_cells[w]; if (valid[i]) elev[i] = Math.max(elev[i], wall); }
     }
-    afterArrival = priorityFlood(elev, sim._channel);
+    return elev;
+  }
+  function recalcStats() {                 // ถูก: re-threshold ที่ STAGE ปัจจุบัน (ไม่รัน Priority-Flood)
     var before = statsOf(baseArrival), after = statsOf(afterArrival);
     statsCache = {
       before: before, after: after,
       reduced: {
-        cells: before.cells - after.cells,
-        area_rai: before.area_rai - after.area_rai,
-        volume_m3: before.volume_m3 - after.volume_m3,
-        buildings: before.buildings - after.buildings,
+        cells: before.cells - after.cells, area_rai: before.area_rai - after.area_rai,
+        volume_m3: before.volume_m3 - after.volume_m3, buildings: before.buildings - after.buildings,
         volume_pct: before.volume_m3 > 0 ? Math.round((before.volume_m3 - after.volume_m3) / before.volume_m3 * 1000) / 10 : 0
       }
     };
+  }
+  function computeAfter() {
+    afterArrival = priorityFlood(elevWithLevees(), sim._channel);
+    flowCache = null;                      // สนามการไหลเปลี่ยนเมื่อสิ่งก่อสร้างเปลี่ยน
+    recalcStats();
+  }
+
+  // ---- สนามทิศการไหล D8 (steepest descent) บน elevation หลังมีสิ่งก่อสร้าง ----
+  function computeFlow() {
+    var elev = elevWithLevees();
+    var fx = new Float32Array(N), fy = new Float32Array(N);
+    var DR = [-1, 1, 0, 0, -1, -1, 1, 1], DC = [0, 0, -1, 1, -1, 1, -1, 1];
+    for (var i = 0; i < N; i++) {
+      if (!valid[i]) continue;
+      var r = (i / NC) | 0, c = i % NC, best = elev[i], br = 0, bc = 0, found = false;
+      for (var d = 0; d < 8; d++) {
+        var nr = r + DR[d], nc = c + DC[d];
+        if (nr < 0 || nc < 0 || nr >= NR || nc >= NC) continue;
+        var j = nr * NC + nc;
+        if (!valid[j]) continue;
+        if (elev[j] < best) { best = elev[j]; br = DR[d]; bc = DC[d]; found = true; }
+      }
+      if (found) { var len = Math.sqrt(bc * bc + br * br); fx[i] = bc / len; fy[i] = br / len; }  // fx=+ตะวันออก, fy=+ใต้(row เพิ่ม)
+    }
+    flowCache = { fx: fx, fy: fy };
   }
 
   async function init() {
@@ -96,9 +121,10 @@ window.IVCompare = (function () {
       fetch("data/dem_grid.json").then(function (r) { return r.json(); }),
       fetch("data/buildings_grid.json").then(function (r) { return r.json(); }),
       fetch("data/yala_boundary.geojson").then(function (r) { return r.json(); }),
-      fetch("data/intervention_sim.json").then(function (r) { return r.json(); })
+      fetch("data/intervention_sim.json").then(function (r) { return r.json(); }),
+      fetch("data/flood_response.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
     ]);
-    var G = res[0], BG = res[1], B = res[2]; sim = res[3];
+    var G = res[0], BG = res[1], B = res[2]; sim = res[3]; FR = res[4];
     NC = G.ncols; NR = G.nrows; N = NC * NR;
     OLON = G.origin_lon; OLAT = G.origin_lat; DLON = G.dlon; DLAT = G.dlat;
     DESIGN_S = sim.design_stage_m; FREEBOARD = sim.freeboard_m; STAGE = DESIGN_S;
@@ -140,6 +166,25 @@ window.IVCompare = (function () {
     splitLon: function () { return OLON + split * NC * DLON; },
     levees: function () { return levees; },
     stats: function () { return statsCache; },
+    // ---- ระดับน้ำปรับได้ (ฝน/แม่น้ำ/เขื่อน → ระดับน้ำ) ----
+    stageFromInputs: function (rain, river, dam) {
+      if (!FR) return STAGE;
+      var M = FR.mapping, base = FR.base_stage_m, onsetRise = FR.onset_stage_m - FR.base_stage_m;
+      var cl = function (p) { return Math.max(0, Math.min(100, p)); };
+      river = cl(river); rain = Math.max(0, rain); dam = cl(dam);
+      var rRiver = river <= M.river_bankfull_pct ? onsetRise * (river / M.river_bankfull_pct)
+        : onsetRise + (river - M.river_bankfull_pct) / (100 - M.river_bankfull_pct) * M.river_extra_m;
+      var rRain = M.rain_max_m * Math.pow(Math.min(1, rain / 100), 0.85);
+      var rDam = dam <= M.dam_onset_pct ? 0 : M.dam_max_m * (dam - M.dam_onset_pct) / (100 - M.dam_onset_pct);
+      return Math.min(base + rRiver + rRain + rDam, base + FR.event_rise_m + 0.5);
+    },
+    stageRange: function () {
+      return FR ? { min: FR.base_stage_m, max: FR.base_stage_m + FR.event_rise_m + 0.5, onset: FR.onset_stage_m, design: DESIGN_S }
+        : { min: STAGE - 3, max: STAGE + 0.5, onset: STAGE - 3, design: DESIGN_S };
+    },
+    setStage: function (s) { var rg = this.stageRange(); STAGE = Math.max(rg.min, Math.min(rg.max, s)); recalcStats(); emit("stage"); },
+    getStage: function () { return STAGE; },
+    flowField: function () { if (!flowCache) computeFlow(); return flowCache; },
     meta: function () { return { NC: NC, NR: NR, N: N, OLON: OLON, OLAT: OLAT, DLON: DLON, DLAT: DLAT, STAGE: STAGE, DESIGN_S: DESIGN_S }; },
     // เซลล์ → arrival ตามฝั่ง split (col < split*NC = ก่อน, มิฉะนั้น = หลัง)
     arrivals: function () { return { base: baseArrival, after: afterArrival }; },

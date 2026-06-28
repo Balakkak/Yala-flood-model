@@ -10,19 +10,20 @@
 window.IV3D = (function () {
   "use strict";
   var map = null, built = false, gl = null, meta;
-  var positions, uvs, grounds, arrB, arrA, indices, M2, N, NC, NR;
-  var prog, vao, posB, uvB, gndB, arrBB, arrAB, drnB, idxB;
-  var aPos, aUv, aGnd, aArrB, aArrA, uMat, uTime, uM2, uStage, uSplit;
-  var t0 = performance.now(), uSplitX = 1e9, STAGE = 18.25;
+  var positions, uvs, grounds, arrB, arrA, flowArr, indices, M2, N, NC, NR;
+  var prog, vao, posB, uvB, gndB, arrBB, arrAB, flowB, idxB;
+  var aPos, aUv, aGnd, aArrB, aArrA, aFlow, uMat, uTime, uM2, uStage, uSplit, uFlowOn;
+  var t0 = performance.now(), uSplitX = 1e9;
+  var stageCur = 18.25, stageTarget = 18.25, flowOn = 1.0;
 
   function mercXOf(lng) { return maplibregl.MercatorCoordinate.fromLngLat({ lng: lng, lat: 6.547 }, 0).x; }
 
   function buildArrays() {
-    meta = IVCompare.meta(); NC = meta.NC; NR = meta.NR; N = meta.N; STAGE = meta.STAGE;
-    var ar = IVCompare.arrays(), A = IVCompare.arrivals(), ground = ar.ground;
+    meta = IVCompare.meta(); NC = meta.NC; NR = meta.NR; N = meta.N;
+    var ar = IVCompare.arrays(), A = IVCompare.arrivals(), ground = ar.ground, ff = IVCompare.flowField();
     M2 = maplibregl.MercatorCoordinate.fromLngLat({ lng: 101.285, lat: 6.547 }, 0).meterInMercatorCoordinateUnits();
     positions = new Float32Array(N * 2); uvs = new Float32Array(N * 2);
-    grounds = new Float32Array(N); arrB = new Float32Array(N); arrA = new Float32Array(N);
+    grounds = new Float32Array(N); arrB = new Float32Array(N); arrA = new Float32Array(N); flowArr = new Float32Array(N * 2);
     for (var r = 0; r < NR; r++) for (var c = 0; c < NC; c++) {
       var i = r * NC + c, lng = meta.OLON + (c + 0.5) * meta.DLON, lat = meta.OLAT - (r + 0.5) * meta.DLAT;
       var p = maplibregl.MercatorCoordinate.fromLngLat({ lng: lng, lat: lat }, 0);
@@ -30,6 +31,7 @@ window.IV3D = (function () {
       grounds[i] = ground[i];
       arrB[i] = isFinite(A.base[i]) ? A.base[i] : 99999;
       arrA[i] = isFinite(A.after[i]) ? A.after[i] : 99999;
+      flowArr[i * 2] = ff.fx[i]; flowArr[i * 2 + 1] = ff.fy[i];      // ทิศไหลใน uv-space (u=ตอ., v=ใต้)
     }
     var idx = [];
     for (var rr = 0; rr < NR - 1; rr++) for (var cc = 0; cc < NC - 1; cc++) {
@@ -38,9 +40,9 @@ window.IV3D = (function () {
     indices = new Uint32Array(idx);
   }
 
-  var VS = "attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;attribute float a_arrB;attribute float a_arrA;" +
-    "uniform mat4 u_matrix;uniform float u_time;uniform float u_m2;uniform float u_stage;uniform float u_split;" +
-    "varying float v_depth;varying vec3 v_n;varying vec2 v_uv;void main(){" +
+  var VS = "attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;attribute float a_arrB;attribute float a_arrA;attribute vec2 a_flow;" +
+    "uniform mat4 u_matrix;uniform float u_time;uniform float u_m2;uniform float u_stage;uniform float u_split;uniform float u_flowOn;" +
+    "varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_flow;void main(){" +
     "float arr=(a_pos.x < u_split)?a_arrB:a_arrA;" +              /* ซ้าย=ก่อน, ขวา=หลัง */
     "float depth=(arr<=u_stage)?max(0.0,u_stage-a_ground):0.0;" +
     "float amp=clamp(depth*2.0,0.0,1.0);vec2 g=a_uv*48.0;" +
@@ -48,15 +50,19 @@ window.IV3D = (function () {
     "float p1=dot(g,d1)+u_time*0.72;float p2=dot(g,d2)*1.5+u_time*0.50;float p3=dot(g,d3)*2.2+u_time*0.92;" +
     "float w=0.038*sin(p1)+0.022*sin(p2)+0.012*sin(p3);" +
     "vec2 gr=0.038*cos(p1)*d1+0.022*cos(p2)*d2*1.5+0.012*cos(p3)*d3*2.2;" +
+    "float fl=length(a_flow);vec2 fdir=fl>0.01?a_flow/fl:vec2(0.0,1.0);" +   /* ระลอกวิ่งตามทิศไหลลงปลายน้ำ → อ้อมคันกั้น */
+    "float pf=dot(a_uv*62.0,fdir)-u_time*1.5;" +
+    "w+=0.034*sin(pf)*fl*u_flowOn;gr+=0.034*cos(pf)*fdir*fl*u_flowOn;v_flow=fl*u_flowOn;" +
     "float surf=max(depth+w*amp,0.02);v_n=normalize(vec3(-gr*amp,1.0));v_depth=depth;v_uv=a_uv;" +
     "float z=(a_ground+surf)*u_m2;gl_Position=u_matrix*vec4(a_pos,z,1.0);}";
-  var FS = "precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;uniform float u_time;void main(){" +
+  var FS = "precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_flow;uniform float u_time;void main(){" +
     "if(v_depth<0.03)discard;float dn=clamp(v_depth/2.5,0.0,1.0);" +
     "vec3 col=mix(vec3(0.32,0.64,0.82),vec3(0.02,0.18,0.42),dn);" +
     "vec3 N=normalize(v_n),V=vec3(0.0,0.0,1.0),L=normalize(vec3(0.55,0.35,0.78)),H=normalize(L+V);" +
     "float spec=pow(max(dot(N,H),0.0),55.0);float fres=pow(1.0-max(dot(N,V),0.0),4.0);" +
     "col=mix(col,vec3(0.62,0.80,0.95),fres*0.55);col+=vec3(1.0,0.97,0.85)*spec*0.7;" +
     "float foam=(1.0-smoothstep(0.03,0.35,v_depth))*0.55;col=mix(col,vec3(0.92,0.97,1.0),foam*0.6);" +
+    "col=mix(col,vec3(0.80,0.92,1.0),clamp(v_flow,0.0,1.0)*0.16);" +     /* ริ้วการไหล */
     "float a=mix(0.42,0.9,dn)+spec*0.35+foam*0.25;gl_FragColor=vec4(col,clamp(a,0.0,0.96));}";
 
   var waterLayer = {
@@ -67,24 +73,25 @@ window.IV3D = (function () {
       prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) console.error("iv-water link:", gl.getProgramInfoLog(prog));
       aPos = gl.getAttribLocation(prog, "a_pos"); aUv = gl.getAttribLocation(prog, "a_uv");
-      aGnd = gl.getAttribLocation(prog, "a_ground"); aArrB = gl.getAttribLocation(prog, "a_arrB"); aArrA = gl.getAttribLocation(prog, "a_arrA");
+      aGnd = gl.getAttribLocation(prog, "a_ground"); aArrB = gl.getAttribLocation(prog, "a_arrB"); aArrA = gl.getAttribLocation(prog, "a_arrA"); aFlow = gl.getAttribLocation(prog, "a_flow");
       uMat = gl.getUniformLocation(prog, "u_matrix"); uTime = gl.getUniformLocation(prog, "u_time");
-      uM2 = gl.getUniformLocation(prog, "u_m2"); uStage = gl.getUniformLocation(prog, "u_stage"); uSplit = gl.getUniformLocation(prog, "u_split");
+      uM2 = gl.getUniformLocation(prog, "u_m2"); uStage = gl.getUniformLocation(prog, "u_stage"); uSplit = gl.getUniformLocation(prog, "u_split"); uFlowOn = gl.getUniformLocation(prog, "u_flowOn");
       var mk = function (data, type) { var b = gl.createBuffer(); gl.bindBuffer(type || gl.ARRAY_BUFFER, b); gl.bufferData(type || gl.ARRAY_BUFFER, data, type ? gl.STATIC_DRAW : gl.DYNAMIC_DRAW); return b; };
       posB = mk(positions); uvB = mk(uvs); gndB = mk(grounds);
-      arrBB = mk(arrB); arrAB = mk(arrA);
+      arrBB = mk(arrB); arrAB = mk(arrA); flowB = mk(flowArr);
       idxB = mk(indices, gl.ELEMENT_ARRAY_BUFFER);
       vao = gl.createVertexArray(); gl.bindVertexArray(vao);
       var bind = function (b, loc, size) { gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0); };
-      bind(posB, aPos, 2); bind(uvB, aUv, 2); bind(gndB, aGnd, 1); bind(arrBB, aArrB, 1); bind(arrAB, aArrA, 1);
+      bind(posB, aPos, 2); bind(uvB, aUv, 2); bind(gndB, aGnd, 1); bind(arrBB, aArrB, 1); bind(arrAB, aArrA, 1); bind(flowB, aFlow, 2);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxB); gl.bindVertexArray(null);
     },
     render: function (glc, mtxArg) {
       var mtx = (mtxArg && mtxArg.defaultProjectionData) ? mtxArg.defaultProjectionData.mainMatrix : mtxArg;
       var now = performance.now();
+      stageCur += (stageTarget - stageCur) * 0.08;          // ไต่ระดับน้ำนุ่ม ๆ เมื่อเลื่อนสไลเดอร์
       gl.useProgram(prog);
       gl.uniformMatrix4fv(uMat, false, mtx); gl.uniform1f(uTime, (now - t0) / 1000); gl.uniform1f(uM2, M2);
-      gl.uniform1f(uStage, STAGE); gl.uniform1f(uSplit, uSplitX);
+      gl.uniform1f(uStage, stageCur); gl.uniform1f(uSplit, uSplitX); gl.uniform1f(uFlowOn, flowOn);
       gl.bindVertexArray(vao);
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false);
@@ -122,14 +129,19 @@ window.IV3D = (function () {
     map.addLayer({ id: "iv-levees-fill", type: "fill", source: "iv-levees", paint: { "fill-color": "#3b82f6", "fill-opacity": 0.12 } });
     buildArrays();
     updateSplit();
+    stageCur = stageTarget = IVCompare.getStage();
     map.addLayer(waterLayer);
   }
 
   function updateAfterBuffer() {
     if (!gl || !arrAB) return;
-    var A = IVCompare.arrivals();
-    for (var i = 0; i < N; i++) arrA[i] = isFinite(A.after[i]) ? A.after[i] : 99999;
+    var A = IVCompare.arrivals(), ff = IVCompare.flowField();
+    for (var i = 0; i < N; i++) {
+      arrA[i] = isFinite(A.after[i]) ? A.after[i] : 99999;
+      flowArr[i * 2] = ff.fx[i]; flowArr[i * 2 + 1] = ff.fy[i];     // สนามการไหลเปลี่ยนตามคันกั้น → อ้อมสิ่งก่อสร้าง
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, arrAB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, arrA);
+    gl.bindBuffer(gl.ARRAY_BUFFER, flowB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, flowArr);
     if (map.getSource("iv-levees")) map.getSource("iv-levees").setData(leveeGeoJSON());
     if (map) map.triggerRepaint();
   }
@@ -165,7 +177,12 @@ window.IV3D = (function () {
       map.on("load", function () { loaded = true; try { buildScene(); } catch (err) { console.warn("IV3D buildScene:", err && err.message); } });
       setTimeout(function () { if (!loaded) showFallback(el); }, 7000);    // ไม่รองรับ WebGL2 → fallback
     },
-    onUpdate: function (kind) { if (kind === "after") updateAfterBuffer(); else if (kind === "split") updateSplit(); },
+    onUpdate: function (kind) {
+      if (kind === "after") updateAfterBuffer();
+      else if (kind === "split") updateSplit();
+      else if (kind === "stage") { stageTarget = IVCompare.getStage(); if (map) map.triggerRepaint(); }
+    },
+    setFlow: function (on) { flowOn = on ? 1.0 : 0.0; if (map) map.triggerRepaint(); },
     show: function () { if (map) setTimeout(function () { try { map.resize(); } catch (e) {} }, 60); },
     hide: function () {}
   };

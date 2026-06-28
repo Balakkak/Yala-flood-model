@@ -30,7 +30,7 @@ window.IVViews = (function () {
     if (!ctx) return;
     var A = IVCompare.arrivals(), base = A.base, after = A.after;
     var ar = IVCompare.arrays(), inStudy = ar.inStudy, chan = ar.chanMask;
-    var st = meta.STAGE, split = IVCompare.getSplit(), splitCol = split * NC;
+    var st = IVCompare.getStage(), split = IVCompare.getSplit(), splitCol = split * NC;
     var img = ctx.createImageData(NC, NR), d = img.data;
     for (var r = 0; r < NR; r++) for (var c = 0; c < NC; c++) {
       var i = r * NC + c, o = i * 4;
@@ -153,12 +153,33 @@ window.IVViews = (function () {
     $("vw2d").addEventListener("click", function () { switchView("2d"); });
     $("vw3d").addEventListener("click", function () { switchView("3d"); });
 
+    // ---- ระดับน้ำ (ฝน/แม่น้ำ/เขื่อน) ----
+    function applyLevel() {
+      var rain = +$("sRain").value, river = +$("sRiver").value, dam = +$("sDam").value;
+      $("vRain").textContent = rain; $("vRiver").textContent = river; $("vDam").textContent = dam;
+      IVCompare.setStage(IVCompare.stageFromInputs(rain, river, dam));
+    }
+    function updateLevelReadout() {
+      var s = IVCompare.getStage(), rg = IVCompare.stageRange(), tag = $("lvlTag");
+      $("lvlStage").textContent = s.toFixed(2);
+      if (s >= rg.design - 0.05) { tag.textContent = "เหตุการณ์ออกแบบ"; tag.className = "lvl-tag design"; }
+      else if (s >= rg.onset) { tag.textContent = "เริ่มท่วม"; tag.className = "lvl-tag onset"; }
+      else { tag.textContent = "ปกติ"; tag.className = "lvl-tag calm"; }
+    }
+
     IVCompare.subscribe(function (kind) {
       if (view === "2d") draw2D();
       if (mount3dFn && IV3D.onUpdate) IV3D.onUpdate(kind);
       if (kind === "after") { styleLevees(); updateStats(); }
+      if (kind === "stage") { updateStats(); updateLevelReadout(); }
       if (kind === "split") syncSideLabels();
     });
+
+    ["sRain", "sRiver", "sDam"].forEach(function (id) { $(id).addEventListener("input", applyLevel); });
+    $("btnDesignEvent").addEventListener("click", function () { $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevel(); });
+    $("togFlow").addEventListener("change", function () { if (IV3D.setFlow) IV3D.setFlow(this.checked); });
+    applyLevel();                      // ตั้งระดับน้ำเริ่มต้นจากสไลเดอร์
+
     setMode("swipe");
   }
 
@@ -185,4 +206,4 @@ window.IVViews = (function () {
 })();
 
 // IV3D ถูกนิยามใน intervention_3d.js (Stage 3) — กันพังถ้ายังไม่โหลด
-window.IV3D = window.IV3D || { mount: function (el) { el.innerHTML = '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#64748b;font:600 13px Sarabun,sans-serif;background:#f8fafc;">กำลังเตรียมมุมมอง 3D…</div>'; }, onUpdate: function () {}, show: function () {}, hide: function () {} };
+window.IV3D = window.IV3D || { mount: function (el) { el.innerHTML = '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#64748b;font:600 13px Sarabun,sans-serif;background:#f8fafc;">กำลังเตรียมมุมมอง 3D…</div>'; }, onUpdate: function () {}, setFlow: function () {}, show: function () {}, hide: function () {} };
