@@ -25,7 +25,7 @@ window.FloodEngine = (function () {
     let s = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
       const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
-      if (((yi > la) !== (yj > la)) && (lo < (xj - xi) * (la - yi) / (yj - yi) + xi)) s = !s;
+      if (((yi > la) !== (yj > la)) && (lo < (xj - xi) * (la - yi) / (yj - yi + 1e-30) + xi)) s = !s;
     }
     return s;
   }
