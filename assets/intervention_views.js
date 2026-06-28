@@ -175,8 +175,31 @@ window.IVViews = (function () {
       if (kind === "split") syncSideLabels();
     });
 
-    ["sRain", "sRiver", "sDam"].forEach(function (id) { $(id).addEventListener("input", applyLevel); });
-    $("btnDesignEvent").addEventListener("click", function () { $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevel(); });
+    // ---- อนิเมชัน "จำลองการท่วม": ไล่ระดับน้ำจากแห้ง → เป้าหมาย (น้ำแพร่ตามลำดับการท่วม) ----
+    var playTimer = null, PLAY_MS = 7000;
+    function targetStage() { return IVCompare.stageFromInputs(+$("sRain").value, +$("sRiver").value, +$("sDam").value); }
+    function setPlayBtn(on) {
+      $("btnPlayFlood").classList.toggle("playing", on);
+      $("playIcon").className = on ? "ti ti-player-stop-filled" : "ti ti-player-play-filled";
+      $("playLabel").textContent = on ? "หยุด" : "จำลองการท่วม";
+    }
+    function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; } setPlayBtn(false); }
+    function playFlood() {
+      if (playTimer) { stopPlay(); IVCompare.setStage(targetStage()); return; }
+      var rg = IVCompare.stageRange(), from = rg.min, to = targetStage();
+      if (to <= from + 0.01) return;
+      var t0 = performance.now();
+      setPlayBtn(true);
+      playTimer = setInterval(function () {            // setInterval ทำงานแม้แท็บไม่โฟกัส (rAF ถูกพัก)
+        var k = Math.min(1, (performance.now() - t0) / PLAY_MS);
+        IVCompare.setStage(from + (to - from) * (k * k * (3 - 2 * k)));   // ease-in-out
+        if (k >= 1) { clearInterval(playTimer); playTimer = null; setPlayBtn(false); }
+      }, 33);
+    }
+
+    ["sRain", "sRiver", "sDam"].forEach(function (id) { $(id).addEventListener("input", function () { stopPlay(); applyLevel(); }); });
+    $("btnDesignEvent").addEventListener("click", function () { stopPlay(); $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevel(); });
+    $("btnPlayFlood").addEventListener("click", playFlood);
     $("togFlow").addEventListener("change", function () { if (IV3D.setFlow) IV3D.setFlow(this.checked); });
     applyLevel();                      // ตั้งระดับน้ำเริ่มต้นจากสไลเดอร์
 
