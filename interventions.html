@@ -207,19 +207,38 @@
       document.getElementById('baProt').textContent = s.levee_demo.protects_buildings;
       if(s.levee_demo.needs_pump) document.getElementById('baPump').textContent = '(ต้องมีสถานีสูบร่วม)';
     }
+    var dividerShown = false;
     var html = (s.recommendations||[]).map(function(r){
       var cls = r.kind==='hotspot'?'hot':(r.kind==='bottleneck'?'bot':(r.kind==='retention'?'ret':''));
       var detail = r.buildings!=null ? ('อาคารโดน '+r.buildings+' หลัง · ลึก ~'+r.depth_mean_m+' ม.')
                  : (r.storage_m3!=null ? ('ความจุเก็บกัก ~'+r.storage_m3.toLocaleString()+' ลบ.ม. ('+r.area_rai+' ไร่)')
                  : (r.drain_cm!=null ? ('ความจุระบายปัจจุบัน '+r.drain_cm+' ซม.') : ''));
       var cost = r.cost_thb ? '<span class="cost">💰 ~'+(r.cost_thb/1e6).toFixed(1)+' ล้าน฿</span>' : '';
+      // เฉพาะมาตรการที่ "จำลองผลได้" เท่านั้นที่มี benefit/cost (อาคารป้องกันได้ต่อล้านบาท)
       var bc = (r.benefit_per_million!=null) ? '<span class="bc">'+r.benefit_per_million+' อาคาร/ล้าน฿</span>' : '';
-      return '<div class="rec"><div class="rec-head"><span class="rec-pri">'+esc(r.priority)+'</span>'
+      // อาคารใกล้จุด = บริบท (รัศมีรับประโยชน์ ~630 ม.) ไม่ใช่ผลจำลอง — ใช้สไตล์กลาง ๆ ไม่ใช่ badge benefit
+      var near = (r.nearby_buildings!=null) ? '<span class="cost" title="อาคารในรัศมีรับประโยชน์ ~630 ม. — เป็นบริบท ไม่ใช่จำนวนอาคารที่ป้องกันได้จากแบบจำลอง"><i class="ti ti-info-circle"></i> ~'+r.nearby_buildings.toLocaleString()+' อาคารใกล้จุด</span>' : '';
+      // feasibility ของแก้มลิง: สร้างบนที่ดินที่มีอาคารไม่ได้ถ้าไม่เวนคืน
+      var feas = '';
+      if (r.buildings_on_site!=null) {
+        feas = (r.buildings_on_site===0)
+          ? '<span style="font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:6px;background:#ecfdf5;color:#047857;" title="ไม่พบอาคารบนพื้นที่บ่อ (จากชั้นข้อมูลอาคาร 30 ม.) — มีโอกาสสร้างได้ ควรยืนยันด้วยแผนที่แปลงที่ดิน"><i class="ti ti-circle-check"></i> ที่ว่างพอ</span>'
+          : '<span style="font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:#fef2f2;color:#b91c1c;" title="มีอาคารตั้งอยู่บนพื้นที่บ่อ — สร้างไม่ได้ถ้าไม่จัดหาที่ดิน/เวนคืน หรือใช้บ่อใต้ดิน/พื้นที่เปิดที่มีอยู่"><i class="ti ti-alert-triangle"></i> มีอาคาร ~'+r.buildings_on_site+' หลังบนพื้นที่ · ต้องจัดหาที่ดิน</span>';
+      }
+      // เส้นแบ่งชั้น: มาตรการที่จำลองผลได้ (จัดอันดับด้วย benefit/cost) → มาตรการที่รอประเมินด้วย SWMM
+      var div = '';
+      if (!dividerShown && r.benefit_per_million==null) {
+        dividerShown = true;
+        div = '<div style="margin:4px 0 10px;padding-top:9px;border-top:1px dashed var(--line);'
+            + 'font-size:10.5px;font-weight:600;color:var(--ink-500);display:flex;align-items:center;gap:6px;">'
+            + '<i class="ti ti-flask"></i> มาตรการเสริม · รอประเมินปริมาตร/ผลลดน้ำท่วมด้วยแบบจำลองรายละเอียด (SWMM) — ยังไม่จัดอันดับเทียบคันกั้น</div>';
+      }
+      return div + '<div class="rec"><div class="rec-head"><span class="rec-pri">'+esc(r.priority)+'</span>'
         + '<span class="rec-type '+cls+'">'+esc(r.type)+'</span></div>'
         + '<p>'+esc(detail)+'</p>'
         + '<p class="measure"><i class="ti ti-arrow-badge-right"></i> '+esc(r.measure)+'</p>'
         + '<p>คาดผล: '+esc(r.expected)+'</p>'
-        + '<div class="rec-foot">'+cost+bc+'</div></div>';
+        + '<div class="rec-foot">'+cost+bc+near+feas+'</div></div>';
     }).join('');
     document.getElementById('recList').innerHTML = html || 'ไม่มีข้อมูล';
   }).catch(e=>{ document.getElementById('recList').textContent='โหลดสรุปไม่ได้'; });

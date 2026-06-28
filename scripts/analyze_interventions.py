@@ -209,13 +209,14 @@ for k in range(ncomp):
     if b < 5:
         continue
     obs_frac = float(observed[cells].mean())            # สัดส่วนที่ตรงกับน้ำท่วมจริง GISTDA
-    dmean = float(depth_hot[cells].mean())
-    score = b * dmean * (1.0 + obs_frac)                # อาคาร × ความลึก × (ยืนยันด้วยของจริง)
+    dmean_onset = float(depth_hot[cells].mean())        # ความลึกที่ระดับ "เริ่มท่วม" → ใช้คัดเลือก/ถ่วงน้ำหนัก (ท่วมบ่อย)
+    dmean_design = float(depth0[cells].mean())          # ความลึกที่ "เหตุการณ์ออกแบบ" → ใช้แสดงผล (สอดคล้อง before/after & baseline)
+    score = b * dmean_onset * (1.0 + obs_frac)          # อาคาร × ความลึก(เริ่มท่วม) × (ยืนยันด้วยของจริง)
     rs = cells // NC; cs = cells % NC
     cen_lon = float(np.mean([lonOf(c) for c in cs]))
     cen_lat = float(np.mean([latOf(r) for r in rs]))
     area_rai = len(cells) * 30 * 30 / 1600.0     # 1 ไร่ = 1600 ตร.ม.
-    zones.append({"cells": cells, "buildings": int(b), "depth_mean": round(dmean, 2),
+    zones.append({"cells": cells, "buildings": int(b), "depth_mean": round(dmean_design, 2),
                   "obs_pct": round(obs_frac * 100), "score": score, "lon": cen_lon, "lat": cen_lat,
                   "area_rai": round(area_rai), "n": len(cells)})
 zones.sort(key=lambda z: -z["score"])
@@ -274,7 +275,9 @@ def levee_for_zone(z):
     rs = z["cells"] // NC; cs = z["cells"] % NC
     poly = hull([(round(lonOf(c), 6), round(latOf(r), 6)) for r, c in zip(rs, cs)])
     length_m = len(perim) * 30          # ปริมณฑลคันกั้นโดยประมาณ
-    needs_pump = after > before * 0.25
+    # คันกั้นแบบล้อมรอบพื้นที่เมือง = ตัดทางระบายโน้มถ่วงสู่ลำน้ำ → ฝน/น้ำหลากภายในต้องสูบออกเสมอ
+    # (โมเดล connectivity จะโชว์ภายใน "แห้ง" เพราะตัดการเชื่อม แต่ความเป็นจริงต้องมีสถานีสูบระบายน้ำใน)
+    needs_pump = True
     cost = length_m * LEVEE_RATE + (PUMP_COST if needs_pump else 0)
     return {"before": before, "after": after, "protected": max(0, before - after),
             "polygon": poly, "length_m": length_m, "needs_pump": needs_pump, "cost": cost}
@@ -298,13 +301,16 @@ for k in range(pn):
     lon = float(np.mean([lonOf(c) for c in cs])); lat = float(np.mean([latOf(r) for r in rs]))
     area_m2 = len(cells) * 900
     storage = area_m2 * POND_DEPTH                      # ลบ.ม.
+    bld_on_site = int(bld[cells].sum())                 # อาคารที่ตั้งบนพื้นที่บ่อจริง → ตัวชี้วัด "สร้างได้ไหม"
     ponds.append({"lon": lon, "lat": lat, "flowacc": float(flowAcc[cells].max()),
                   "area_rai": round(area_m2 / 1600), "storage_m3": int(storage),
-                  "cost": int(storage * POND_RATE),
+                  "cost": int(storage * POND_RATE), "bld_on_site": bld_on_site,
                   "near_buildings": buildings_near(int(cells[len(cells) // 2]))})
-ponds.sort(key=lambda p: -p["flowacc"])
+# เลือก "จุดที่สร้างได้จริงก่อน" : ที่ดินว่าง/อาคารน้อยมาก่อน แล้วจึงดูปริมาณน้ำที่มารวม (flowacc)
+# (จุด flowacc สูงสุดมักอยู่กลางเมืองที่มีอาคารทับ — แนะนำไปก็สร้างไม่ได้ถ้าไม่เวนคืน)
+ponds.sort(key=lambda p: (p["bld_on_site"], -p["flowacc"]))
 ponds = ponds[:3]
-print(f"retention ponds (top {len(ponds)})")
+print(f"retention ponds (top {len(ponds)}): " + ", ".join(f"flowAcc{round(p['flowacc'])}/อาคารบนบ่อ{p['bld_on_site']}" for p in ponds))
 
 def per_million(benefit, cost):
     return round(benefit / (cost / 1e6), 2) if cost else 0.0
@@ -328,12 +334,15 @@ for i, b in enumerate(bottlenecks, 1):
                        "label": f"คอขวดระบายน้ำ {i}",
                        "rationale": f"น้ำไหลมารวมสูง แต่ความจุระบายเพียง {b['drain_cm']} ซม. → ควรเพิ่มท่อ/สูบ"}})
 for i, p in enumerate(ponds, 1):
+    feas = ("พื้นที่ว่างพอ (อาคารบนพื้นที่ ~0)" if p["bld_on_site"] == 0
+            else f"⚠ มีอาคาร ~{p['bld_on_site']} หลังบนพื้นที่ — ต้องจัดหาที่ดิน/เวนคืน")
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(p["lon"], 6), round(p["lat"], 6)]},
         "properties": {"kind": "retention", "rank": i, "area_rai": p["area_rai"],
                        "storage_m3": p["storage_m3"], "cost_thb": p["cost"],
+                       "buildings_on_site": p["bld_on_site"],
                        "label": f"แก้มลิง/บ่อหน่วงน้ำ {i}",
-                       "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม."}})
+                       "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม. · {feas}"}})
 for rank, z in enumerate(zones, 1):
     lv = z["levee"]
     if lv["polygon"]:
@@ -373,7 +382,11 @@ for p in ponds:
                  "storage_m3": p["storage_m3"], "area_rai": p["area_rai"],
                  "measure": f"บ่อหน่วงน้ำ ~{p['area_rai']} ไร่ ที่จุดน้ำไหลมารวมหลัก",
                  "protects_buildings": None, "cost_thb": p["cost"],
-                 "benefit_per_million": per_million(p["near_buildings"], p["cost"]),
+                 # ยังไม่ได้จำลองผลลดน้ำท่วมของบ่อหน่วง (ต้อง SWMM) → ไม่ใส่ benefit/cost ที่จะไปจัดอันดับ
+                 # เทียบกับคันกั้นที่มีผลจากโมเดล (เลี่ยงเทียบคนละหน่วย) — โชว์อาคารใกล้จุดเป็น "บริบท" เท่านั้น
+                 "benefit_per_million": None,
+                 "nearby_buildings": p["near_buildings"],
+                 "buildings_on_site": p["bld_on_site"],   # อาคารบนพื้นที่บ่อ → ใช้เตือน feasibility
                  "expected": f"หน่วงน้ำ ~{p['storage_m3']:,} ลบ.ม. ลดยอดน้ำท่วมท้ายน้ำ (ปริมาตรจริงต้อง SWMM)"})
 for i, b in enumerate(bottlenecks, 1):
     recs.append({"type": "คอขวดระบายน้ำ (bottleneck)", "kind": "bottleneck",
@@ -382,8 +395,12 @@ for i, b in enumerate(bottlenecks, 1):
                  "protects_buildings": None, "cost_thb": DRAIN_COST,
                  "benefit_per_million": None,
                  "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"})
-# จัดลำดับ: มี benefit/cost มาก่อน (มากสุด→น้อย) แล้วตามด้วยที่ไม่มีตัวเลข
-recs.sort(key=lambda r: (r["benefit_per_million"] is None, -(r["benefit_per_million"] or 0)))
+# จัดลำดับ: มาตรการที่ "จำลองผลได้" (มี benefit/cost) มาก่อน เรียงมากสุด→น้อย
+# จากนั้นเป็นมาตรการที่ "รอประเมินด้วยแบบจำลองรายละเอียด" (ไม่มีตัวเลข) — แก้มลิงก่อนคอขวด
+KIND_ORDER = {"hotspot": 0, "retention": 1, "bottleneck": 2}
+recs.sort(key=lambda r: (r["benefit_per_million"] is None,
+                         -(r["benefit_per_million"] or 0),
+                         KIND_ORDER.get(r["kind"], 9)))
 for i, r in enumerate(recs, 1):
     r["priority"] = i
 
@@ -394,7 +411,9 @@ summary = {"design_stage_m": DESIGN_S,
                                     "after": levee["after"], "needs_pump": levee["needs_pump"],
                                     "cost_thb": levee["cost"]},
            "cost_note": "ต้นทุนเป็นค่าสมมุติคร่าว ๆ (คันกั้น 30,000 ฿/ม. · สูบ 5 ล้าน฿ · ท่อ 2 ล้าน฿ · บ่อหน่วง 1,200 ฿/ลบ.ม.) "
-                        "ใช้จัดลำดับ benefit/cost เท่านั้น ไม่ใช่ราคาจริง",
+                        "คันกั้นแบบล้อมพื้นที่รวมสถานีสูบระบายน้ำภายในเสมอ (ตัดทางระบายโน้มถ่วง) · "
+                        "ใช้จัดลำดับ benefit/cost เท่านั้น ไม่ใช่ราคาจริง · "
+                        "แก้มลิง/คอขวด: ตัวเลขข้างจุดเป็นบริบท (อาคารใกล้/ความจุ) ยังไม่ใช่ผลลดน้ำท่วมจากแบบจำลอง",
            "recommendations": recs,
            "method_note": "ระดับ screening บน Priority-Flood (DEM FABDEM 30 ม., ±5 ม.) — ใช้เลือกจุด/เทียบมาตรการ "
                           "ไม่ใช่ออกแบบขนาดจริง (ต้อง HEC-RAS 2D + SWMM + LiDAR)",
