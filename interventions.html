@@ -101,6 +101,12 @@
     .lvl-preset:hover { background:#f1f5f9; }
     .lvl-flow { font-size:11px; color:var(--ink-700); display:inline-flex; align-items:center; gap:5px; cursor:pointer; }
     .lvl-flow input { accent-color:#0ea5e9; }
+    .lvl-play { width:100%; margin-top:10px; border:none; border-radius:9px; cursor:pointer;
+      background:#0c3b6e; color:#fff; font:600 13px 'Sarabun',sans-serif; padding:9px 12px;
+      display:flex; align-items:center; justify-content:center; gap:7px; transition:background .15s; }
+    .lvl-play:hover { background:#0a2f57; }
+    .lvl-play.playing { background:#b91c1c; }
+    .lvl-play.playing:hover { background:#991b1b; }
   </style>
 </head>
 <body>
@@ -183,10 +189,11 @@
             <input type="range" id="sDam" min="0" max="100" value="90"><span class="lvl-val" id="vDam">90</span></div>
           <div style="display:flex;gap:7px;align-items:center;margin-top:9px;flex-wrap:wrap;">
             <button id="btnDesignEvent" class="lvl-preset"><i class="ti ti-target"></i> เหตุการณ์ออกแบบ</button>
-            <label class="lvl-flow"><input type="checkbox" id="togFlow" checked> <i class="ti ti-wind"></i> แสดงการไหล (3D)</label>
+            <label class="lvl-flow"><input type="checkbox" id="togFlow" checked> <i class="ti ti-wind"></i> ริ้วการไหล (3D)</label>
           </div>
+          <button id="btnPlayFlood" class="lvl-play"><i class="ti ti-player-play-filled" id="playIcon"></i> <span id="playLabel">จำลองการท่วม</span></button>
           <p style="margin:8px 0 0;font-size:10.5px;color:var(--ink-500);line-height:1.5;">
-            ปรับแล้วน้ำขยาย/ลดทั้ง 2D และ 3D · <b>การไหลของน้ำแสดงในมุมมอง 3D</b> (เห็นน้ำอ้อมคันกั้นที่เปิด)</p>
+            กด <b>จำลองการท่วม</b> เพื่อดูน้ำค่อย ๆ ไหลเข้าท่วมตามลำดับ (แม่น้ำ→เมือง) · เปิดคันกั้นแล้วจะเห็นน้ำถูกกั้น/อ้อม</p>
         </div>
       </section>
 
