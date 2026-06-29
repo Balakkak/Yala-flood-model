@@ -117,19 +117,31 @@ for r in range(NR):
         if valid[i] and pin(lonOf(c), latOf(r), SB):
             inStudy[i] = True
 
-# ---------- 4) อาคาร → ความหนาแน่นต่อเซลล์ (exposure) ----------
+# ---------- 4) อาคาร → ความหนาแน่นต่อเซลล์ (exposure) + footprint mask ----------
+# bld = จำนวนอาคาร (จุดศูนย์กลาง) ต่อเซลล์ → ใช้นับ exposure
+# building_cell = เซลล์ที่ "รอยอาคารจริงทับ" (ไม่ใช่แค่จุดศูนย์กลาง) → ใช้กันไม่ให้สิ่งก่อสร้างทับอาคาร
+#   สำคัญ: อาคารใหญ่ 1 หลังกินหลายเซลล์ แต่มีศูนย์กลางเดียว — ต้อง rasterize รอยอาคารถึงจะกันทับได้จริง
 bld = np.zeros(N)
+building_cell = np.zeros(N, dtype=bool)
 for f in J("yala_buildings.geojson")["features"]:
     g = f.get("geometry") or {}
     if g.get("type") != "Polygon":
         continue
     ring = g["coordinates"][0]
-    lon = sum(p[0] for p in ring) / len(ring)
-    la = sum(p[1] for p in ring) / len(ring)
+    xs = [p[0] for p in ring]; ys = [p[1] for p in ring]
+    lon = sum(xs) / len(xs); la = sum(ys) / len(ys)
     c, r = colOf(lon), rowOf(la)
     if 0 <= r < NR and 0 <= c < NC:
         bld[r * NC + c] += 1
-print(f"อาคารในกริด {int(bld.sum())} · เซลล์เมือง {inStudy.sum()}")
+        building_cell[r * NC + c] = True          # อาคารเล็กกว่าเซลล์ → อย่างน้อยกันเซลล์ศูนย์กลาง
+    c0 = max(0, colOf(min(xs))); c1 = min(NC - 1, colOf(max(xs)))     # rasterize รอยอาคารทุกเซลล์ที่ทับ
+    r0 = max(0, rowOf(max(ys))); r1 = min(NR - 1, rowOf(min(ys)))
+    for rr in range(r0, r1 + 1):
+        for cc in range(c0, c1 + 1):
+            i = rr * NC + cc
+            if not building_cell[i] and pin(lonOf(cc), latOf(rr), ring):
+                building_cell[i] = True
+print(f"อาคารในกริด {int(bld.sum())} · เซลล์รอยอาคาร {int(building_cell.sum())} · เซลล์เมือง {inStudy.sum()}")
 
 # ---------- 4a) ถนน → road mask (rasterize LineString ลงเซลล์ 30 ม.) ----------
 # ใช้คัด/หลีกตำแหน่งสิ่งก่อสร้าง: บ่อหน่วง/สูบ ไม่ควรทับถนน · คันกั้นรายงานจุดที่พาดถนน
@@ -153,8 +165,8 @@ try:
 except Exception as e:
     print("  (ข้ามชั้นถนน:", e, ")")
 
-# occupied = เซลล์ที่ "มีอาคาร หรือ ถนนพาด" → ใช้ไม่ได้สำหรับบ่อหน่วง/สูบ
-occupied = (bld > 0) | road_cell
+# occupied = เซลล์ที่ "รอยอาคารทับ หรือ ถนนพาด" → ใช้ไม่ได้สำหรับบ่อหน่วง/สูบ
+occupied = building_cell | road_cell
 print(f"ถนน {int(road_cell.sum())} เซลล์ · occupied {int(occupied.sum())} · ว่างในเมือง {int((inStudy & ~occupied).sum())}")
 
 # ---------- 4b) น้ำท่วมจริง GISTDA (โพลิกอนดาวเทียม) → observed mask (ถ่วงน้ำหนัก hotspot) ----------
@@ -347,6 +359,7 @@ for k in range(pn):
                   "area_rai": round(area_m2 / 1600), "storage_m3": int(storage),
                   "cost": int(storage * POND_RATE), "bld_on_site": bld_on_site,
                   "road_on_site": road_on_site, "occ_frac": occ_frac, "free_cells": len(free),
+                  "free_idx": [int(i) for i in free],     # เซลล์ว่างจริง → ให้ 3D วาดบ่อตามรูปจริง (ไม่ทับอาคาร)
                   "near_buildings": buildings_near(int(use[len(use) // 2]))})
 # เลือก "จุดที่สร้างได้จริงก่อน": ทับอาคาร/ถนนน้อยที่สุดก่อน แล้วจึงดูปริมาณน้ำที่มารวม (flowacc)
 # ต้องมีที่ว่างพอสร้างจริง (≥4 เซลล์ ≈ 0.2 ไร่ขึ้นไป) มิฉะนั้นข้าม
@@ -363,7 +376,7 @@ def nearest_free(r0, c0, rad=4):
     for r in range(max(0, r0 - rad), min(NR, r0 + rad + 1)):
         for c in range(max(0, c0 - rad), min(NC, c0 + rad + 1)):
             i = r * NC + c
-            if valid[i] and not (bld[i] > 0) and i not in levee_wall:   # ยอมให้อยู่ริมถนนได้ แต่ไม่ทับอาคาร
+            if valid[i] and not building_cell[i] and i not in levee_wall:   # ยอมให้อยู่ริมถนนได้ แต่ไม่ทับรอยอาคาร
                 d = (r - r0) ** 2 + (c - c0) ** 2
                 if d < bd:
                     bd, best = d, i
@@ -418,6 +431,8 @@ for i, p in enumerate(ponds, 1):
         "properties": {"kind": "retention", "rank": i, "area_rai": p["area_rai"],
                        "storage_m3": p["storage_m3"], "cost_thb": p["cost"],
                        "buildings_on_site": p["bld_on_site"], "road_on_site": p["road_on_site"],
+                       # ศูนย์กลางเซลล์ว่างจริง (30 ม.) → 3D วาดบ่อเป็นรูปจริง ไม่ใช่วงกลมทับอาคาร
+                       "cells": [[round(lonOf(idx % NC), 6), round(latOf(idx // NC), 6)] for idx in p["free_idx"]],
                        "label": f"แก้มลิง/บ่อหน่วงน้ำ {i}",
                        "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม. · {feas}"}})
 for rank, z in enumerate(zones, 1):
