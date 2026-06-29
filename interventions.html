@@ -116,6 +116,20 @@
       border:1px solid #bae6fd; font-size:12px; color:var(--ink-700); line-height:1.55; }
     .prot-result b { color:#047857; } .prot-result.none { background:#f8fafc; border-color:var(--line); }
     .prot-result.none b { color:var(--ink-600); }
+    /* หมุด HTML บนมุมมอง 3D (คอขวด/แก้มลิง) */
+    .iv3d-marker { display:inline-flex; align-items:center; gap:4px; font:700 11px 'Sarabun',sans-serif;
+      padding:3px 9px; border-radius:999px; box-shadow:var(--shadow-sm); white-space:nowrap; cursor:pointer;
+      border:1px solid; transform:translateY(-2px); }
+    .iv3d-marker.bottleneck { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+    .iv3d-marker.retention { background:#f0fdfa; color:#0f766e; border-color:#99f6e4; }
+    /* รายการมาตรการเชิงข้อมูล (คอขวด/แก้มลิง) ในการ์ด toggle */
+    .info-divider { margin:11px 0 8px; padding-top:10px; border-top:1px dashed var(--line);
+      font:600 10.5px 'Sarabun',sans-serif; color:var(--ink-500); display:flex; align-items:flex-start; gap:6px; line-height:1.45; }
+    .struct-info { display:flex; align-items:flex-start; gap:9px; padding:8px 10px; border:1px dashed var(--line);
+      border-radius:10px; margin-bottom:8px; cursor:pointer; transition:background .15s,border-color .15s; }
+    .struct-info:hover { background:#f8fafc; border-color:#cbd5e1; }
+    .info-badge { font:600 9.5px 'Sarabun',sans-serif; color:#7c3aed; background:#f5f3ff;
+      padding:1px 6px; border-radius:5px; margin-left:3px; vertical-align:middle; }
   </style>
 </head>
 <body>

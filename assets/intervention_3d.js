@@ -109,6 +109,64 @@ window.IV3D = (function () {
     }) };
   }
 
+  // วงแหวน (n-gon) รอบจุด รัศมีเป็นเมตร → ใช้ปั้นโมเดล extrusion ของท่อ/สูบ/บ่อหน่วง
+  function makeRing(lng, lat, rM, n) {
+    n = n || 28; var ring = [];
+    var dLat = rM / 111320, dLng = rM / (111320 * Math.cos(lat * Math.PI / 180));
+    for (var k = 0; k <= n; k++) { var a = k / n * 2 * Math.PI; ring.push([lng + dLng * Math.cos(a), lat + dLat * Math.sin(a)]); }
+    return ring;
+  }
+
+  // โมเดล 3D + หมุด HTML ของคอขวด (ท่อ/สูบ) และแก้มลิง — จาก intervention_candidates.geojson
+  function buildCandidateMarkers() {
+    fetch("data/intervention_candidates.geojson").then(function (r) { return r.json(); }).then(function (fc) {
+      var bott = { type: "FeatureCollection", features: [] };   // สถานีสูบ/ท่อ = ฐาน + เสา
+      var pond = { type: "FeatureCollection", features: [] };   // แก้มลิง = แอ่งน้ำตื้น
+      (fc.features || []).forEach(function (f) {
+        var p = f.properties || {}, g = f.geometry || {};
+        if (g.type !== "Point") return;
+        var lng = g.coordinates[0], lat = g.coordinates[1];
+        if (p.kind === "bottleneck") {
+          bott.features.push({ type: "Feature", properties: { h: 6, base: 0, color: "#9a3412" },
+            geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, 34, 8)] } });           // ฐานป้อมสูบ
+          bott.features.push({ type: "Feature", properties: { h: 42, base: 0, color: "#ea580c" },
+            geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, 14, 4)] } });           // เสา/อาคารสูบ
+          addHtmlMarker(lng, lat, "bottleneck", "ti-windmill", "สูบ/ท่อ", p.label, p.rationale);
+        } else if (p.kind === "retention") {
+          var rM = Math.max(60, Math.sqrt((p.area_rai || 10) * 1600 / Math.PI));                  // รัศมีจากพื้นที่จริง
+          pond.features.push({ type: "Feature", properties: { rM: rM },
+            geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, rM, 30)] } });
+          addHtmlMarker(lng, lat, "retention", "ti-droplet", "แก้มลิง", p.label, p.rationale);
+        }
+      });
+      // ---- คอขวด: ป้อมสูบ extrusion สีส้ม ----
+      if (bott.features.length) {
+        map.addSource("iv-bott", { type: "geojson", data: bott });
+        map.addLayer({ id: "iv-bott-3d", type: "fill-extrusion", source: "iv-bott",
+          paint: { "fill-extrusion-color": ["get", "color"], "fill-extrusion-height": ["get", "h"],
+                   "fill-extrusion-base": ["get", "base"], "fill-extrusion-opacity": 0.92 } });
+      }
+      // ---- แก้มลิง: แอ่งน้ำตื้นสีเขียวมรกต + ขอบบ่อ ----
+      if (pond.features.length) {
+        map.addSource("iv-pond", { type: "geojson", data: pond });
+        map.addLayer({ id: "iv-pond-3d", type: "fill-extrusion", source: "iv-pond",
+          paint: { "fill-extrusion-color": "#0d9488", "fill-extrusion-height": 1.4, "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.5 } });
+        map.addLayer({ id: "iv-pond-rim", type: "line", source: "iv-pond",
+          paint: { "line-color": "#0f766e", "line-width": 2.5, "line-dasharray": [2, 1.5] } });
+      }
+    }).catch(function (e) { console.warn("3D candidates โหลดไม่ได้", e); });
+  }
+
+  // หมุด HTML (รองรับไทยเต็ม ไม่พึ่ง glyph) + popup อธิบายเหตุผล
+  function addHtmlMarker(lng, lat, kind, icon, short, label, rationale) {
+    var el = document.createElement("span");
+    el.className = "iv3d-marker " + kind;
+    el.innerHTML = '<i class="ti ' + icon + '"></i> ' + short;
+    var pop = new maplibregl.Popup({ offset: 22, closeButton: false })
+      .setHTML('<b>' + (label || short) + '</b><br>' + (rationale || ""));
+    new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([lng, lat]).setPopup(pop).addTo(map);
+  }
+
   function buildScene() {
     if (built) return; built = true;
     if (!map.getSource("terrain-dem")) {
@@ -127,6 +185,7 @@ window.IV3D = (function () {
     map.addSource("iv-levees", { type: "geojson", data: leveeGeoJSON() });
     map.addLayer({ id: "iv-levees-line", type: "line", source: "iv-levees", paint: { "line-color": "#1d4ed8", "line-width": 3 } });
     map.addLayer({ id: "iv-levees-fill", type: "fill", source: "iv-levees", paint: { "fill-color": "#3b82f6", "fill-opacity": 0.12 } });
+    buildCandidateMarkers();
     buildArrays();
     updateSplit();
     stageCur = stageTarget = IVCompare.getStage();
@@ -171,6 +230,7 @@ window.IV3D = (function () {
       else if (kind === "stage") { stageTarget = IVCompare.getStage(); if (map) map.triggerRepaint(); }
     },
     setFlow: function (on) { flowOn = on ? 1.0 : 0.0; if (map) map.triggerRepaint(); },
+    flyTo: function (lng, lat) { if (map) map.flyTo({ center: [lng, lat], zoom: 15.4, pitch: 56, essential: true }); },
     show: function () { if (map) setTimeout(function () { try { map.resize(); } catch (e) {} }, 60); },
     hide: function () {}
   };

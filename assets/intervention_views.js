@@ -98,6 +98,46 @@ window.IVViews = (function () {
   }
   function fitToActive() { /* คงมุมมองเดิม — ไม่บังคับซูม */ }
 
+  // โฟกัสไปจุดหนึ่ง (3D บินไป / 2D pan) — ใช้กับรายการมาตรการเชิงข้อมูล
+  function focusPoint(lng, lat) {
+    if (view === "3d" && IV3D.flyTo) IV3D.flyTo(lng, lat);
+    else if (lmap) lmap.flyTo([lat, lng], 15, { animate: true });
+  }
+
+  // ================= มาตรการเชิงข้อมูล (คอขวด/แก้มลิง) — ยังไม่จำลองผล รอ SWMM =================
+  function buildInfoMeasures() {
+    var host = $("structToggles");
+    fetch("data/intervention_candidates.geojson").then(function (r) { return r.json(); }).then(function (fc) {
+      var pts = (fc.features || []).filter(function (f) {
+        return f.geometry && f.geometry.type === "Point" && (f.properties.kind === "bottleneck" || f.properties.kind === "retention");
+      });
+      if (!pts.length) return;
+      var wrap = document.createElement("div");
+      wrap.innerHTML = '<div class="info-divider"><i class="ti ti-flask"></i> มาตรการเสริม · กดเพื่อดูตำแหน่งบนแผนที่ — ยังไม่จำลองผลลดน้ำท่วม (รอ SWMM)</div>';
+      // แก้มลิงก่อน แล้วคอขวด (ให้ตรงลำดับในรายการแนะนำ)
+      pts.sort(function (a, b) { return (a.properties.kind === "retention" ? 0 : 1) - (b.properties.kind === "retention" ? 0 : 1); });
+      pts.forEach(function (f) {
+        var p = f.properties, isPond = p.kind === "retention";
+        var lng = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
+        var icon = isPond ? "ti-droplet" : "ti-windmill", col = isPond ? "#0f766e" : "#c2410c";
+        var detail = isPond
+          ? ("บ่อหน่วง ~" + (p.area_rai || "?") + " ไร่ · เก็บ ~" + ((p.storage_m3 || 0).toLocaleString()) + " ลบ.ม."
+             + (p.buildings_on_site === 0 ? " · ที่ว่างพอ" : (p.buildings_on_site != null ? " · มีอาคาร ~" + p.buildings_on_site + " หลัง" : "")))
+          : ("ความจุระบายปัจจุบัน " + (p.drain_cm != null ? p.drain_cm + " ซม." : "ต่ำ") + " · ควรเพิ่มท่อ/สูบ");
+        var row = document.createElement("div");
+        row.className = "struct-info";
+        row.innerHTML = '<i class="ti ' + icon + '" style="color:' + col + ';margin-top:1px;"></i>'
+          + '<div style="flex:1;"><div class="t" style="font-size:12px;font-weight:700;color:var(--ink-900);">' + esc(p.label)
+          + ' <span class="info-badge">เชิงข้อมูล</span></div>'
+          + '<div class="d" style="font-size:10.5px;color:var(--ink-600);margin-top:2px;line-height:1.45;">' + esc(detail) + '</div></div>'
+          + '<i class="ti ti-map-pin" style="color:var(--ink-400);margin-top:1px;"></i>';
+        row.addEventListener("click", function () { focusPoint(lng, lat); });
+        wrap.appendChild(row);
+      });
+      host.appendChild(wrap);
+    }).catch(function (e) { console.warn("info measures โหลดไม่ได้", e); });
+  }
+
   // ================= mount =================
   function mount(leaflet_map, Lref) {
     L = Lref; lmap = leaflet_map; meta = IVCompare.meta(); NC = meta.NC; NR = meta.NR;
@@ -118,6 +158,7 @@ window.IVViews = (function () {
     styleLevees();
 
     buildToggles();
+    buildInfoMeasures();
     updateStats();
     draw2D();
 
@@ -225,4 +266,4 @@ window.IVViews = (function () {
 })();
 
 // IV3D ถูกนิยามใน intervention_3d.js (Stage 3) — กันพังถ้ายังไม่โหลด
-window.IV3D = window.IV3D || { mount: function (el, _meta, onFail) { if (onFail) setTimeout(onFail, 50); }, onUpdate: function () {}, setFlow: function () {}, show: function () {}, hide: function () {} };
+window.IV3D = window.IV3D || { mount: function (el, _meta, onFail) { if (onFail) setTimeout(onFail, 50); }, onUpdate: function () {}, setFlow: function () {}, flyTo: function () {}, show: function () {}, hide: function () {} };
