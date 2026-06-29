@@ -168,7 +168,7 @@
           <div class="row"><span class="grad"></span> ความลึกน้ำท่วม 0 → 3 ม.</div>
           <div class="row"><span class="grad" style="background:linear-gradient(90deg,#cfe8ff,#9ec9f0,#f6c66b,#ef8e4d,#d6452e);"></span> ความสูงอาคาร (3D)</div>
           <div class="row"><span class="dot" style="background:#34d399"></span> พื้นที่ที่ <b>มาตรการกันน้ำได้</b></div>
-          <div class="row"><span class="dot" style="background:#2563eb"></span> แนวคันกั้นที่เปิดใช้งาน</div>
+          <div class="row"><span class="dot" style="background:#9ca3af"></span> กำแพงคันกั้น 3D (ตามแนวจริง) · <span class="dot" style="background:#2563eb"></span> โซนป้องกันได้</div>
           <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยง · <span class="dot" style="background:#ea580c"></span> คอขวด · <span class="dot" style="background:#0d9488"></span> แก้มลิง</div>
         </div>
       </div>
@@ -260,11 +260,11 @@
   fetch('data/intervention_candidates.geojson').then(r=>r.json()).then(fc=>{
     fc.features.forEach(function(f){
       var p=f.properties, g=f.geometry;
-      if(p.kind==='levee' && g.type==='Polygon'){
-        L.geoJSON(f, { style:{ color:'#2563eb', weight:2.5, dashArray:'7,5', fillColor:'#3b82f6', fillOpacity:0.08 } })
-          .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+(p.needs_pump?'<br><span style="color:#b45309">* ต้องมีสถานีสูบร่วม</span>':''))
+      if(p.kind==='levee' && g.type==='LineString'){
+        L.geoJSON(f, { style:{ color:'#78716c', weight:5, opacity:0.9 } })
+          .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+(p.needs_pump?'<br><span style="color:#b45309">* ต้องมีประตูระบาย/สถานีสูบที่ปากท่อ</span>':''))
           .addTo(map);
-        g.coordinates[0].forEach(c=>bounds.push([c[1],c[0]]));
+        g.coordinates.forEach(c=>bounds.push([c[1],c[0]]));
       } else if(g.type==='Point'){
         var lat=g.coordinates[1], lon=g.coordinates[0];
         if(p.kind==='hotspot'){

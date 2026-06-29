@@ -91,6 +91,21 @@ arrival = priority_flood(ground, channel)
 reach = np.isfinite(arrival)
 print(f"grid {NC}×{NR} · channel seeds {len(channel)} · reachable {reach.sum()}")
 
+# ---------- 1b) ระยะถึงแม่น้ำ (BFS จาก channel) → ใช้วางคันกั้น "ริมตลิ่ง" ----------
+import collections
+rdist = np.full(N, -1, dtype=np.int64)
+_q = collections.deque()
+for i in channel:
+    rdist[i] = 0; _q.append(i)
+while _q:
+    i = _q.popleft(); r, c = divmod(i, NC)
+    for dr, dc in NB:
+        nr, nc = r + dr, c + dc
+        if 0 <= nr < NR and 0 <= nc < NC:
+            j = nr * NC + nc
+            if valid[j] and rdist[j] < 0:
+                rdist[j] = rdist[i] + 1; _q.append(j)
+
 # ---------- 2) Flow accumulation (D8) ----------
 def flow_accum(elev):
     acc = np.ones(N)
@@ -310,48 +325,93 @@ def buildings_near(i, rad=10):
             s += bld[r * NC + c]
     return int(s)
 
-# ---------- 6) what-if: คันกั้น/คันดินรอบ hotspot (จำลองซ้ำทุกโซน) ----------
-def levee_for_zone(z):
-    zmask = np.zeros(N, dtype=bool); zmask[z["cells"]] = True
-    elev2 = ground.copy(); perim = []
-    for i in z["cells"]:
-        r, c = divmod(int(i), NC)
-        for dr, dc in NB:
-            nr, nc = r + dr, c + dc
-            if not (0 <= nr < NR and 0 <= nc < NC) or not zmask[nr * NC + nc]:
-                perim.append(int(i)); break
-    for i in perim:
-        elev2[i] = max(elev2[i], DESIGN_S + FREEBOARD)
+# ---------- 6) คันกั้นริมแม่น้ำปัตตานี: กำแพงตามริมตลิ่งฝั่งเมือง (แนวแม่น้ำหลักจริง) หลบอาคาร ----------
+# แนวคิดตรงกับการออกแบบจริง: น้ำล้นจากแม่น้ำปัตตานี → วางกำแพงตามริมตลิ่งฝั่งเมืองตลอดแนว
+# (ไม่ใช่ล้อมรอบพื้นที่ ซึ่งพาดอาคาร/ตัดถนน) · วางบนเซลล์ว่าง เลี่ยงรอยอาคาร
+# 6a) rasterize แนวแม่น้ำหลัก (yala_waterways.geojson) → mainriver → BFS ระยะถึงแม่น้ำหลัก (mdist)
+mainriver = np.zeros(N, dtype=bool)
+def _burn_line(co):
+    for a, b in zip(co, co[1:]):
+        c0, r0 = fcol(a[0]), frow(a[1]); c1, r1 = fcol(b[0]), frow(b[1])
+        steps = int(max(abs(c1 - c0), abs(r1 - r0)) * 2) + 1
+        for s in range(steps + 1):
+            t = s / steps; cc = int(c0 + (c1 - c0) * t); rr = int(r0 + (r1 - r0) * t)
+            if 0 <= rr < NR and 0 <= cc < NC: mainriver[rr * NC + cc] = True
+def _each_line(geom, cb):
+    t = (geom or {}).get("type")
+    if t == "LineString": cb(geom["coordinates"])
+    elif t == "MultiLineString":
+        for ls in geom["coordinates"]: cb(ls)
+    elif t == "GeometryCollection":
+        for g in geom.get("geometries", []): _each_line(g, cb)
+river_line = []
+try:
+    for f in J("yala_waterways.geojson")["features"]:
+        g = f.get("geometry") or {}
+        _each_line(g, _burn_line)
+        if g.get("type") == "LineString": river_line = g["coordinates"]
+except Exception as e:
+    print("  (ข้ามแนวแม่น้ำหลัก:", e, ")")
+mdist = np.full(N, -1, dtype=np.int64); _mq = collections.deque()
+for i in np.where(mainriver)[0]:
+    mdist[i] = 0; _mq.append(int(i))
+while _mq:
+    i = _mq.popleft(); r, c = divmod(i, NC)
+    for dr, dc in NB:
+        nr, nc = r + dr, c + dc
+        if 0 <= nr < NR and 0 <= nc < NC:
+            j = nr * NC + nc
+            if valid[j] and mdist[j] < 0: mdist[j] = mdist[i] + 1; _mq.append(j)
+
+def riverbank_levee():
+    # เซลล์ริมตลิ่งฝั่งเมือง = ติดแม่น้ำหลัก (mdist==1) · ในเขตเมือง · มีอาคารใกล้ (= ฝั่งเมือง ไม่ใช่ตลิ่งโล่ง)
+    bank = [int(i) for i in np.where((mdist == 1) & inStudy & valid & (~mainriver))[0]
+            if buildings_near(int(i), rad=6) > 0]
+    # หลบอาคาร: เซลล์ริมตลิ่งที่ทับรอยอาคาร → ขยับไปเซลล์ว่างใกล้สุดที่ยังติดแม่น้ำหลัก
+    wallset = set()
+    for i in bank:
+        if not building_cell[i]:
+            wallset.add(i); continue
+        r0, c0 = divmod(i, NC); best = None; bd = 1e9
+        for rr in range(max(0, r0 - 3), min(NR, r0 + 4)):
+            for cc in range(max(0, c0 - 3), min(NC, c0 + 4)):
+                j = rr * NC + cc
+                if valid[j] and not building_cell[j] and 1 <= mdist[j] <= 3:
+                    dd = (rr - r0) ** 2 + (cc - c0) ** 2
+                    if dd < bd: bd = dd; best = j
+        if best is not None: wallset.add(best)
+    perim = sorted(wallset)
+    elev2 = ground.copy()
+    for i in perim: elev2[i] = max(elev2[i], DESIGN_S + FREEBOARD)
     arrival2 = priority_flood(elev2, channel)
     flooded2 = inStudy & np.isfinite(arrival2) & (arrival2 <= DESIGN_S)
-    before = int(bld[zmask & flooded0].sum())
-    after = int(bld[zmask & flooded2].sum())
-    rs = z["cells"] // NC; cs = z["cells"] % NC
-    poly = hull([(round(lonOf(c), 6), round(latOf(r), 6)) for r, c in zip(rs, cs)])
-    length_m = len(perim) * 30          # ปริมณฑลคันกั้นโดยประมาณ
-    # คันกั้นแบบล้อมรอบพื้นที่เมือง = ตัดทางระบายโน้มถ่วงสู่ลำน้ำ → ฝน/น้ำหลากภายในต้องสูบออกเสมอ
-    # (โมเดล connectivity จะโชว์ภายใน "แห้ง" เพราะตัดการเชื่อม แต่ความเป็นจริงต้องมีสถานีสูบระบายน้ำใน)
-    needs_pump = True
+    before = int(bld[flooded0].sum()); after = int(bld[flooded2].sum())     # ทั้งเมือง (แนวกั้นแม่น้ำคุ้มทั้งเมือง)
+    length_m = len(perim) * 30
+    needs_pump = True   # ริมแม่น้ำ: ต้องมีประตูระบาย/สถานีสูบที่จุดท่อระบายออกแม่น้ำ
     cost = length_m * LEVEE_RATE + (PUMP_COST if needs_pump else 0)
-    # แนวคันกั้นถูกบังคับด้วยรูปทรงพื้นที่ที่ต้องล้อม — ย้ายไปที่ว่างไม่ได้ จึง "รายงาน" จุดที่พาดอาคาร/ถนนแทน
-    bld_under_wall = int(sum(bld[i] for i in perim))
+    bld_under_wall = int(sum(bld[i] for i in perim))            # ตั้งใจให้ ~0 (หลบอาคารแล้ว)
     road_under_wall = int(sum(1 for i in perim if road_cell[i]))
-    return {"before": before, "after": after, "protected": max(0, before - after),
-            "polygon": poly, "length_m": length_m, "needs_pump": needs_pump, "cost": cost,
+    wall_h = [max(0.0, (DESIGN_S + FREEBOARD) - ground[i]) for i in perim]
+    wall_h_mean = round(float(np.mean(wall_h)), 1) if wall_h else 0.0
+    wall_h_max = round(float(max(wall_h)), 1) if wall_h else 0.0
+    return {"rank": 1, "label": "แนวคันกั้นริมแม่น้ำปัตตานี (ฝั่งเมือง)",
+            "before": before, "after": after, "protected": max(0, before - after),
+            "line": [[round(p[0], 6), round(p[1], 6)] for p in river_line],
+            "length_m": length_m, "needs_pump": needs_pump, "cost": cost,
             "bld_under_wall": bld_under_wall, "road_under_wall": road_under_wall,
-            "wall_cells": [int(i) for i in perim]}     # เซลล์ที่ยกเป็นคันกั้น (ให้ engine ฝั่งเว็บรันซ้ำ)
+            "wall_h_mean": wall_h_mean, "wall_h_max": wall_h_max,
+            "wall_cells": [int(i) for i in perim]}
 
-for z in zones:
-    z["levee"] = levee_for_zone(z)
-levee = zones[0]["levee"] if zones else None
-if levee:
-    print(f"levee @ zone#1: ก่อน {levee['before']} → หลัง {levee['after']} · ป้องกัน {levee['protected']}"
-          + (" (ต้องมีสูบร่วม)" if levee["needs_pump"] else ""))
+riverbank = riverbank_levee()
+levees = [riverbank] if riverbank["wall_cells"] else []
+print(f"riverbank levee: wall {len(riverbank['wall_cells'])} cells (~{round(riverbank['length_m']/1000,1)} กม.) · "
+      f"สูงเฉลี่ย {riverbank['wall_h_mean']} ม. · ป้องกัน {riverbank['protected']} (จากท่วม {riverbank['before']}) · "
+      f"ทับอาคาร {riverbank['bld_under_wall']}/ถนน {riverbank['road_under_wall']}")
 
 # เซลล์ที่ "ถูกจองแล้ว" โดยคันกั้น → สิ่งก่อสร้างอื่นห้ามทับ (กันชนกันเอง)
 levee_wall = set()
-for z in zones:
-    levee_wall.update(z["levee"]["wall_cells"])
+for lv in levees:
+    levee_wall.update(lv["wall_cells"])
 
 # ---------- 7) แก้มลิง/บ่อหน่วงน้ำ ที่จุด flow-accumulation สูงสุด (เลือกบน "ที่ว่าง") ----------
 pond_thr = np.percentile(flowAcc[inStudy], 99)
@@ -417,15 +477,13 @@ def per_million(benefit, cost):
 # ---------- เขียน GeoJSON ----------
 feats = []
 for rank, z in enumerate(zones, 1):
-    lv = z["levee"]
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(z["lon"], 6), round(z["lat"], 6)]},
         "properties": {"kind": "hotspot", "rank": rank, "buildings": z["buildings"],
                        "depth_mean_m": z["depth_mean"], "area_rai": z["area_rai"],
                        "radius_m": int((z["n"] * 900 / 3.1416) ** 0.5),
-                       "protects_buildings": lv["protected"], "cost_thb": lv["cost"],
                        "label": f"จุดเสี่ยงอันดับ {rank}",
-                       "rationale": f"ท่วม ~{z['depth_mean']} ม. · อาคารโดน {z['buildings']} หลัง · คันกั้นป้องกันได้ ~{lv['protected']} หลัง"}})
+                       "rationale": f"ท่วม ~{z['depth_mean']} ม. · อาคารโดน {z['buildings']} หลัง · อยู่ริมแม่น้ำ → คันกั้นริมตลิ่งช่วยได้"}})
 for i, b in enumerate(bottlenecks, 1):
     site = ("ย้ายจุดติดตั้งไปที่ว่างข้างเคียง (เลี่ยงอาคาร)" if b.get("relocated")
             else ("อยู่บนแนวถนน — ตั้งบ่อพัก/สูบริมทางได้" if b.get("on_road") else "มีที่ว่างติดตั้ง"))
@@ -451,19 +509,19 @@ for i, p in enumerate(ponds, 1):
                        "cells": [[round(lonOf(idx % NC), 6), round(latOf(idx // NC), 6)] for idx in p["free_idx"]],
                        "label": f"แก้มลิง/บ่อหน่วงน้ำ {i}",
                        "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม. · {feas}"}})
-for rank, z in enumerate(zones, 1):
-    lv = z["levee"]
-    if lv["polygon"]:
-        ring = lv["polygon"] + [lv["polygon"][0]]
+for lv in levees:
+    if lv["line"]:
         feats.append({"type": "Feature",
-            "geometry": {"type": "Polygon", "coordinates": [[[p[0], p[1]] for p in ring]]},
-            "properties": {"kind": "levee", "rank": rank, "protects_buildings": lv["protected"],
-                           "area_rai": z["area_rai"], "needs_pump": lv["needs_pump"], "cost_thb": lv["cost"],
+            "geometry": {"type": "LineString", "coordinates": [[p[0], p[1]] for p in lv["line"]]},
+            "properties": {"kind": "levee", "rank": lv["rank"], "protects_buildings": lv["protected"],
+                           "needs_pump": lv["needs_pump"], "cost_thb": lv["cost"],
                            "length_m": lv["length_m"], "bld_under_wall": lv["bld_under_wall"],
                            "road_under_wall": lv["road_under_wall"],
-                           "label": f"แนวคันกั้นน้ำรอบจุดเสี่ยงอันดับ {rank}",
-                           "rationale": f"ล้อมคันกั้น{'+สูบ' if lv['needs_pump'] else ''} → ป้องกัน ~{lv['protected']} หลัง"
-                                        + (f" · แนวกำแพงพาดอาคาร ~{lv['bld_under_wall']} หลัง / ถนน {lv['road_under_wall']} จุด (ต้องจัดแนว/เวนคืนบางส่วน)" if (lv['bld_under_wall'] or lv['road_under_wall']) else " · แนวกำแพงไม่ทับอาคาร/ถนนหลัก")}})
+                           "wall_h_mean": lv["wall_h_mean"], "wall_h_max": lv["wall_h_max"],
+                           "label": lv["label"],
+                           "rationale": f"กำแพงริมตลิ่งฝั่งเมือง ~{round(lv['length_m']/1000,1)} กม. · สูงเฉลี่ย ~{lv['wall_h_mean']} ม. (สูงสุด ~{lv['wall_h_max']}) → ป้องกัน ~{lv['protected']} หลัง (จากท่วม {lv['before']})"
+                                        + (f" · เลี่ยงอาคารแล้ว (ทับ {lv['bld_under_wall']} หลัง) ข้ามถนน {lv['road_under_wall']} จุด" )
+                                        + " · ต้องมีประตูระบาย/สูบที่ปากท่อ · แนวคัดกรอง ต้องจัดแนวจริงด้วย LiDAR+HEC-RAS"}})
 
 fc = {"type": "FeatureCollection", "name": "intervention_candidates",
       "_meta": {"design_stage_m": DESIGN_S, "method": "Priority-Flood screening on FABDEM 30m",
@@ -495,17 +553,17 @@ sim = {
     },
     "levees": [
         {
-            "rank": rank,
-            "label": f"คันกั้นรอบจุดเสี่ยงอันดับ {rank}",
-            "centroid": [round(z["lat"], 6), round(z["lon"], 6)],
-            "polygon": z["levee"]["polygon"],
-            "wall_cells": z["levee"]["wall_cells"],
-            "before": z["levee"]["before"], "after": z["levee"]["after"],
-            "protected": z["levee"]["protected"],
-            "needs_pump": z["levee"]["needs_pump"], "cost_thb": z["levee"]["cost"],
-            "bld_under_wall": z["levee"]["bld_under_wall"], "road_under_wall": z["levee"]["road_under_wall"],
+            "rank": lv["rank"],
+            "label": lv["label"],
+            "line": lv["line"],                        # แนวแม่น้ำหลัก (สำหรับวาด 2D)
+            "wall_cells": lv["wall_cells"],            # เซลล์กำแพงริมตลิ่ง (engine รันซ้ำ + วาดกำแพง 3D)
+            "before": lv["before"], "after": lv["after"],
+            "protected": lv["protected"],
+            "needs_pump": lv["needs_pump"], "cost_thb": lv["cost"],
+            "bld_under_wall": lv["bld_under_wall"], "road_under_wall": lv["road_under_wall"],
+            "wall_h_mean": lv["wall_h_mean"], "wall_h_max": lv["wall_h_max"],
         }
-        for rank, z in enumerate(zones, 1)
+        for lv in levees
     ],
     "note": "depth = design_stage − arrival (Priority-Flood minimax) นอกร่องน้ำจริง · "
             "ปริมาตรเป็นระดับ screening (ต้อง HEC-RAS 2D + SWMM เพื่อออกแบบจริง)",
@@ -514,15 +572,21 @@ json.dump(sim, open(os.path.join(D, "intervention_sim.json"), "w", encoding="utf
 
 # ---------- เขียน summary (จัดอันดับ + cost/benefit) ----------
 recs = []
+for lv in levees:
+    recs.append({"type": "คันกั้นริมแม่น้ำ (levee)", "kind": "levee",
+                 "where": "ริมแม่น้ำปัตตานี ฝั่งเมือง",
+                 "measure": f"กำแพงริมตลิ่ง ~{round(lv['length_m']/1000,1)} กม. สูงเฉลี่ย ~{lv['wall_h_mean']} ม."
+                           + (" + ประตูระบาย/สถานีสูบ" if lv["needs_pump"] else ""),
+                 "protects_buildings": lv["protected"], "cost_thb": lv["cost"],
+                 "benefit_per_million": per_million(lv["protected"], lv["cost"]),
+                 "expected": f"ป้องกันอาคารได้ ~{lv['protected']} หลัง (จากที่ท่วม {lv['before']}) · เลี่ยงรอยอาคาร (ทับ {lv['bld_under_wall']} หลัง)"})
 for rank, z in enumerate(zones, 1):
-    lv = z["levee"]
     recs.append({"type": "พื้นที่เสี่ยง (hotspot)", "kind": "hotspot",
                  "where": f"{z['lat']:.3f}, {z['lon']:.3f}",
                  "buildings": z["buildings"], "depth_mean_m": z["depth_mean"],
-                 "measure": "คันกั้นน้ำรอบพื้นที่" + (" + สถานีสูบ" if lv["needs_pump"] else "") + " / ยกถนนรอบนอก",
-                 "protects_buildings": lv["protected"], "cost_thb": lv["cost"],
-                 "benefit_per_million": per_million(lv["protected"], lv["cost"]),
-                 "expected": f"ป้องกันอาคารได้ ~{lv['protected']} หลัง (จากที่ท่วม {lv['before']})"})
+                 "measure": "จุดเสี่ยงน้ำท่วม (อ้างอิงเลือกแนวคันกั้น/มาตรการ)",
+                 "protects_buildings": None, "cost_thb": None, "benefit_per_million": None,
+                 "expected": f"ท่วม ~{z['depth_mean']} ม. · อาคาร {z['buildings']} หลัง"})
 for p in ponds:
     recs.append({"type": "แก้มลิง/บ่อหน่วงน้ำ (retention)", "kind": "retention",
                  "where": f"{p['lat']:.3f}, {p['lon']:.3f}",
@@ -546,7 +610,7 @@ for i, b in enumerate(bottlenecks, 1):
                  "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"})
 # จัดลำดับ: มาตรการที่ "จำลองผลได้" (มี benefit/cost) มาก่อน เรียงมากสุด→น้อย
 # จากนั้นเป็นมาตรการที่ "รอประเมินด้วยแบบจำลองรายละเอียด" (ไม่มีตัวเลข) — แก้มลิงก่อนคอขวด
-KIND_ORDER = {"hotspot": 0, "retention": 1, "bottleneck": 2}
+KIND_ORDER = {"levee": 0, "retention": 1, "bottleneck": 2, "hotspot": 3}
 recs.sort(key=lambda r: (r["benefit_per_million"] is None,
                          -(r["benefit_per_million"] or 0),
                          KIND_ORDER.get(r["kind"], 9)))
@@ -556,11 +620,11 @@ for i, r in enumerate(recs, 1):
 summary = {"design_stage_m": DESIGN_S,
            "baseline_buildings_flooded": bld_flooded0,
            "baseline_flood_cells": int(flooded0.sum()),
-           "levee_demo": levee and {"protects_buildings": levee["protected"], "before": levee["before"],
-                                    "after": levee["after"], "needs_pump": levee["needs_pump"],
-                                    "cost_thb": levee["cost"]},
+           "levee_demo": (levees[0] and {"protects_buildings": riverbank["protected"], "before": riverbank["before"],
+                                    "after": riverbank["after"], "needs_pump": riverbank["needs_pump"],
+                                    "cost_thb": riverbank["cost"], "length_m": riverbank["length_m"]}) if levees else None,
            "cost_note": "ต้นทุนเป็นค่าสมมุติคร่าว ๆ (คันกั้น 30,000 ฿/ม. · สูบ 5 ล้าน฿ · ท่อ 2 ล้าน฿ · บ่อหน่วง 1,200 ฿/ลบ.ม.) "
-                        "คันกั้นแบบล้อมพื้นที่รวมสถานีสูบระบายน้ำภายในเสมอ (ตัดทางระบายโน้มถ่วง) · "
+                        "คันกั้นริมแม่น้ำต้องมีประตูระบาย/สถานีสูบที่ปากท่อระบายออกแม่น้ำ · "
                         "ใช้จัดลำดับ benefit/cost เท่านั้น ไม่ใช่ราคาจริง · "
                         "แก้มลิง/คอขวด: ตัวเลขข้างจุดเป็นบริบท (อาคารใกล้/ความจุ) ยังไม่ใช่ผลลดน้ำท่วมจากแบบจำลอง",
            "recommendations": recs,
