@@ -117,25 +117,38 @@ window.IV3D = (function () {
     return ring;
   }
 
+  // สี่เหลี่ยมขนาดเซลล์ 30 ม. รอบศูนย์กลางเซลล์ (lng,lat) → วาดบ่อตามเซลล์ว่างจริง ไม่ทับอาคาร
+  function cellSquare(lng, lat) {
+    var hLng = meta.DLON / 2, hLat = meta.DLAT / 2;
+    return [[lng - hLng, lat - hLat], [lng + hLng, lat - hLat], [lng + hLng, lat + hLat], [lng - hLng, lat + hLat], [lng - hLng, lat - hLat]];
+  }
+
   // โมเดล 3D + หมุด HTML ของคอขวด (ท่อ/สูบ) และแก้มลิง — จาก intervention_candidates.geojson
   function buildCandidateMarkers() {
+    if (!meta) meta = IVCompare.meta();
     fetch("data/intervention_candidates.geojson").then(function (r) { return r.json(); }).then(function (fc) {
       var bott = { type: "FeatureCollection", features: [] };   // สถานีสูบ/ท่อ = ฐาน + เสา
-      var pond = { type: "FeatureCollection", features: [] };   // แก้มลิง = แอ่งน้ำตื้น
+      var pond = { type: "FeatureCollection", features: [] };   // แก้มลิง = แอ่งน้ำตามเซลล์ว่างจริง
       (fc.features || []).forEach(function (f) {
         var p = f.properties || {}, g = f.geometry || {};
         if (g.type !== "Point") return;
         var lng = g.coordinates[0], lat = g.coordinates[1];
         if (p.kind === "bottleneck") {
-          bott.features.push({ type: "Feature", properties: { h: 6, base: 0, color: "#9a3412" },
-            geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, 34, 8)] } });           // ฐานป้อมสูบ
-          bott.features.push({ type: "Feature", properties: { h: 42, base: 0, color: "#ea580c" },
-            geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, 14, 4)] } });           // เสา/อาคารสูบ
+          bott.features.push({ type: "Feature", properties: { h: 5, base: 0, color: "#9a3412" },
+            geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, 16, 8)] } });           // ฐานป้อมสูบ (เล็กลง ~1 เซลล์)
+          bott.features.push({ type: "Feature", properties: { h: 30, base: 0, color: "#ea580c" },
+            geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, 7, 4)] } });            // เสา/อาคารสูบ
           addHtmlMarker(lng, lat, "bottleneck", "ti-windmill", "สูบ/ท่อ", p.label, p.rationale);
         } else if (p.kind === "retention") {
-          var rM = Math.max(60, Math.sqrt((p.area_rai || 10) * 1600 / Math.PI));                  // รัศมีจากพื้นที่จริง
-          pond.features.push({ type: "Feature", properties: { rM: rM },
-            geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, rM, 30)] } });
+          // วาดบ่อจากเซลล์ว่างจริง (สี่เหลี่ยม 30 ม. ต่อเซลล์) → ไม่มีทางทับอาคาร; ถ้าไม่มีข้อมูลค่อย fallback วงกลม
+          if (p.cells && p.cells.length) {
+            p.cells.forEach(function (c) {
+              pond.features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [cellSquare(c[0], c[1])] } });
+            });
+          } else {
+            var rM = Math.sqrt((p.area_rai || 2) * 1600 / Math.PI);
+            pond.features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, rM, 24)] } });
+          }
           addHtmlMarker(lng, lat, "retention", "ti-droplet", "แก้มลิง", p.label, p.rationale);
         }
       });
