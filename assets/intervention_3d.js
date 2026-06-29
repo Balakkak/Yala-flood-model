@@ -102,11 +102,27 @@ window.IV3D = (function () {
     }
   };
 
-  function leveeGeoJSON() {
-    return { type: "FeatureCollection", features: IVCompare.levees().filter(function (l) { return IVCompare.isEnabled(l.rank) && l.polygon && l.polygon.length >= 3; }).map(function (l) {
+  function leveeGeoJSON() {       // hull = "โซนที่ป้องกันได้" (ศักยภาพ) — แสดงตลอด (ไม่ใช่ตัวกำแพง)
+    return { type: "FeatureCollection", features: IVCompare.levees().filter(function (l) { return l.polygon && l.polygon.length >= 3; }).map(function (l) {
       var ring = l.polygon.map(function (p) { return [p[0], p[1]]; }); ring.push(ring[0]);
-      return { type: "Feature", geometry: { type: "Polygon", coordinates: [ring] }, properties: {} };
+      return { type: "Feature", geometry: { type: "Polygon", coordinates: [ring] }, properties: { on: IVCompare.isEnabled(l.rank) ? 1 : 0 } };
     }) };
+  }
+
+  // กำแพงคันกั้น 3D = ยกแท่งตามเซลล์ wall_cells จริง — แสดง "แนวที่เสนอ" ตลอด (เตี้ย) · เปิดมาตรการ → ยกเป็นกำแพงเต็ม
+  function leveeWallGeoJSON() {
+    if (!meta) meta = IVCompare.meta();
+    var feats = [];
+    IVCompare.levees().forEach(function (l) {
+      if (!l.wall_cells) return;
+      var on = IVCompare.isEnabled(l.rank) ? 1 : 0, h = l.wall_h_mean || 4;
+      l.wall_cells.forEach(function (i) {
+        var c = i % meta.NC, r = Math.floor(i / meta.NC);
+        var lng = meta.OLON + (c + 0.5) * meta.DLON, lat = meta.OLAT - (r + 0.5) * meta.DLAT;
+        feats.push({ type: "Feature", properties: { h: h, on: on }, geometry: { type: "Polygon", coordinates: [cellSquare(lng, lat)] } });
+      });
+    });
+    return { type: "FeatureCollection", features: feats };
   }
 
   // วงแหวน (n-gon) รอบจุด รัศมีเป็นเมตร → ใช้ปั้นโมเดล extrusion ของท่อ/สูบ/บ่อหน่วง
@@ -182,6 +198,7 @@ window.IV3D = (function () {
 
   function buildScene() {
     if (built) return; built = true;
+    meta = IVCompare.meta();
     if (!map.getSource("terrain-dem")) {
       map.addSource("terrain-dem", { type: "raster-dem", tiles: ["terrain/{z}/{x}/{y}.png"], encoding: "terrarium", tileSize: 256, minzoom: 12, maxzoom: 16 });
       map.setTerrain({ source: "terrain-dem", exaggeration: 1.0 });
@@ -194,10 +211,17 @@ window.IV3D = (function () {
       map.addLayer({ id: "iv-buildings-3d", type: "fill-extrusion", source: "iv-buildings",
         paint: { "fill-extrusion-color": HEIGHT_COLOR, "fill-extrusion-height": ["coalesce", ["get", "height"], 8], "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.92, "fill-extrusion-vertical-gradient": true } });
     }).catch(function (e) { console.warn("3D buildings โหลดไม่ได้", e); });
-    // เส้นคันกั้นที่เปิดใช้งาน
+    // โซนที่ป้องกันได้ (hull) = ขอบเขตศักยภาพ — เส้นประบาง ไม่ใช่ตัวกำแพง
     map.addSource("iv-levees", { type: "geojson", data: leveeGeoJSON() });
-    map.addLayer({ id: "iv-levees-line", type: "line", source: "iv-levees", paint: { "line-color": "#1d4ed8", "line-width": 3 } });
-    map.addLayer({ id: "iv-levees-fill", type: "fill", source: "iv-levees", paint: { "fill-color": "#3b82f6", "fill-opacity": 0.12 } });
+    map.addLayer({ id: "iv-levees-fill", type: "fill", source: "iv-levees", paint: { "fill-color": ["case", ["==", ["get", "on"], 1], "rgba(59,130,246,0.12)", "rgba(59,130,246,0.05)"] } });
+    map.addLayer({ id: "iv-levees-line", type: "line", source: "iv-levees", paint: { "line-color": "#2563eb", "line-width": 1.5, "line-dasharray": [3, 2], "line-opacity": 0.7 } });
+    // กำแพงคันกั้น 3D จริง = แท่งตามเซลล์ wall_cells · ปิด=แนวเสนอเตี้ยจาง · เปิด=กำแพงเต็มสีคอนกรีต
+    // (opacity ฝัง alpha ใน color เพราะ fill-extrusion-opacity ไม่รองรับ data-driven)
+    map.addSource("iv-levee-wall", { type: "geojson", data: leveeWallGeoJSON() });
+    map.addLayer({ id: "iv-levee-wall-3d", type: "fill-extrusion", source: "iv-levee-wall",
+      paint: { "fill-extrusion-color": ["case", ["==", ["get", "on"], 1], "rgba(120,113,108,0.98)", "rgba(168,162,158,0.5)"],
+               "fill-extrusion-height": ["case", ["==", ["get", "on"], 1], 5.0, 1.8],   // ความสูงโครงสร้างเพื่อมองเห็น (ตลิ่งจริงบน DEM ±5ม. วัดไม่ได้)
+               "fill-extrusion-base": 0, "fill-extrusion-vertical-gradient": true } });
     buildCandidateMarkers();
     buildArrays();
     updateSplit();
@@ -215,6 +239,7 @@ window.IV3D = (function () {
     gl.bindBuffer(gl.ARRAY_BUFFER, arrAB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, arrA);
     gl.bindBuffer(gl.ARRAY_BUFFER, flowB); gl.bufferSubData(gl.ARRAY_BUFFER, 0, flowArr);
     if (map.getSource("iv-levees")) map.getSource("iv-levees").setData(leveeGeoJSON());
+    if (map.getSource("iv-levee-wall")) map.getSource("iv-levee-wall").setData(leveeWallGeoJSON());   // วาดกำแพง 3D ตามมาตรการที่เปิด
     if (map) map.triggerRepaint();
   }
   function updateSplit() { uSplitX = mercXOf(IVCompare.splitLon()); if (map) map.triggerRepaint(); }

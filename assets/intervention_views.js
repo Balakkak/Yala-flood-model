@@ -84,10 +84,12 @@ window.IVViews = (function () {
       el.className = "struct-tog";
       el.innerHTML =
         '<input type="checkbox" data-rank="' + lv.rank + '">' +
-        '<div><div class="t"><i class="ti ti-shield-half" style="color:#2563eb;"></i> ' + lv.label + '</div>' +
-        '<div class="d">ป้องกัน ~' + lv.protected + ' หลัง · ~' + (lv.cost_thb / 1e6).toFixed(1) + ' ล้าน฿' +
-        (lv.needs_pump ? ' · ต้องมีสถานีสูบ' : '') +
-        ((lv.bld_under_wall || lv.road_under_wall) ? '<br><span style="color:#b45309;">แนวกำแพงพาดอาคาร ~' + (lv.bld_under_wall || 0) + ' หลัง / ถนน ' + (lv.road_under_wall || 0) + ' จุด</span>' : '') +
+        '<div><div class="t"><i class="ti ti-shield-half" style="color:#78716c;"></i> ' + lv.label + '</div>' +
+        '<div class="d">ป้องกัน ~' + lv.protected + ' หลัง · ~' + (lv.cost_thb / 1e6).toFixed(0) + ' ล้าน฿' +
+        (lv.length_m ? ' · ยาว ~' + (lv.length_m / 1000).toFixed(1) + ' กม.' : '') +
+        (lv.needs_pump ? ' · ต้องมีประตูระบาย/สูบ' : '') +
+        '<br><span style="color:#047857;">วางริมตลิ่งฝั่งเมือง · เลี่ยงรอยอาคาร (ทับ ' + (lv.bld_under_wall || 0) + ' หลัง)' +
+        (lv.road_under_wall ? ' · ข้ามถนน ' + lv.road_under_wall + ' จุด' : '') + '</span>' +
         '</div></div>';
       var cb = el.querySelector("input");
       cb.addEventListener("change", function () {
