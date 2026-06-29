@@ -11,7 +11,6 @@ window.IVViews = (function () {
   "use strict";
   var L, lmap, meta, NC, NR;
   var canvas, ctx, floodOverlay, leveeLayers = {};
-  var mode = "swipe";                 // 'before' | 'swipe' | 'after'
   var mount3dFn = null, view = "2d";
 
   var $ = function (id) { return document.getElementById(id); };
@@ -45,10 +44,6 @@ window.IVViews = (function () {
       } else { d[o + 3] = 0; }
     }
     ctx.putImageData(img, 0, 0);
-    if (mode === "swipe") {                       // เส้นแบ่ง swipe
-      var x = Math.round(splitCol);
-      ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fillRect(x - 1, 0, 2, NR);
-    }
     floodOverlay.setUrl(canvas.toDataURL());
   }
 
@@ -61,40 +56,24 @@ window.IVViews = (function () {
     });
   }
 
-  // ================= สถิติ + ป้าย =================
+  // ================= ผลของมาตรการ (ป้องกันได้เท่าไร เมื่อเทียบกับไม่มีโครงสร้าง) =================
   function updateStats() {
     var s = IVCompare.stats(); if (!s) return;
-    $("cmpStats").style.display = "grid";
-    $("stVolB").textContent = fmt(s.before.volume_m3); $("stVolA").textContent = fmt(s.after.volume_m3);
-    $("stAreaB").textContent = fmt(s.before.area_rai); $("stAreaA").textContent = fmt(s.after.area_rai);
-    $("stBldB").textContent = fmt(s.before.buildings); $("stBldA").textContent = fmt(s.after.buildings);
-    var cut = function (el, before, red) { el.textContent = "−" + fmt(red) + (before > 0 ? " (" + Math.round(red / before * 100) + "%)" : ""); el.style.visibility = red > 0 ? "visible" : "hidden"; };
-    cut($("stVolCut"), s.before.volume_m3, s.reduced.volume_m3);
-    cut($("stAreaCut"), s.before.area_rai, s.reduced.area_rai);
-    cut($("stBldCut"), s.before.buildings, s.reduced.buildings);
+    var n = IVCompare.enabledCount(), res = $("protResult");
+    res.style.display = "block";
+    if (n === 0) {
+      res.className = "prot-result none";
+      res.innerHTML = '<i class="ti ti-info-circle"></i> ยังไม่เปิดมาตรการ — น้ำท่วมเต็มตามระดับที่จำลอง';
+    } else {
+      res.className = "prot-result";
+      res.innerHTML = '<i class="ti ti-shield-check"></i> เปิด ' + n + ' มาตรการ · ป้องกันอาคาร <b>~' +
+        fmt(s.reduced.buildings) + ' หลัง</b> · ลดปริมาตรน้ำ <b>~' + s.reduced.volume_pct + '%</b> (ที่ระดับน้ำปัจจุบัน)';
+    }
     // หมายเหตุสถานีสูบเมื่อเปิดคันกั้นที่ต้องสูบร่วม
     var pumps = IVCompare.levees().filter(function (l) { return IVCompare.isEnabled(l.rank) && l.needs_pump; });
     var pe = $("cmpPump");
     if (pumps.length) { pe.style.display = "block"; pe.innerHTML = '<i class="ti ti-windmill"></i> คันกั้นที่เปิด ' + pumps.length + ' จุด เป็นแบบล้อมพื้นที่ — ต้องมี<b>สถานีสูบระบายน้ำภายใน</b>ร่วมเสมอ'; }
     else { pe.style.display = "none"; }
-  }
-
-  function setMode(m) {
-    mode = m;
-    $("cmpBefore").classList.toggle("active", m === "before");
-    $("cmpSwipe").classList.toggle("active", m === "swipe");
-    $("cmpAfter").classList.toggle("active", m === "after");
-    $("cmpSwipeWrap").style.opacity = m === "swipe" ? "1" : "0.4";
-    $("cmpSplit").disabled = (m !== "swipe");
-    if (m === "before") IVCompare.setSplit(1);
-    else if (m === "after") IVCompare.setSplit(0);
-    else IVCompare.setSplit($("cmpSplit").value / 100);
-    syncSideLabels();
-  }
-  function syncSideLabels() {
-    var split = IVCompare.getSplit();
-    $("cmpSideB").style.display = split > 0.001 ? "block" : "none";
-    $("cmpSideA").style.display = split < 0.999 ? "block" : "none";
   }
 
   // ================= โครงสร้าง toggles =================
@@ -142,14 +121,8 @@ window.IVViews = (function () {
     updateStats();
     draw2D();
 
-    // controls
-    $("cmpSplit").addEventListener("input", function () {
-      if (mode !== "swipe") setMode("swipe");
-      IVCompare.setSplit(this.value / 100);
-    });
-    $("cmpBefore").addEventListener("click", function () { setMode("before"); });
-    $("cmpAfter").addEventListener("click", function () { setMode("after"); });
-    $("cmpSwipe").addEventListener("click", function () { setMode("swipe"); });
+    // controls — โชว์สถานะ "มีโครงสร้าง" เสมอ (เอา UI เปรียบเทียบ ก่อน/หลัง ออก แต่เก็บโค้ดไว้)
+    IVCompare.setSplit(0);
     $("vw2d").addEventListener("click", function () { switchView("2d"); });
     $("vw3d").addEventListener("click", function () { switchView("3d"); });
 
@@ -172,7 +145,6 @@ window.IVViews = (function () {
       if (mount3dFn && IV3D.onUpdate) IV3D.onUpdate(kind);
       if (kind === "after") { styleLevees(); updateStats(); }
       if (kind === "stage") { updateStats(); updateLevelReadout(); }
-      if (kind === "split") syncSideLabels();
     });
 
     // ---- อนิเมชัน "จำลองการท่วม": ไล่ระดับน้ำจากแห้ง → เป้าหมาย (น้ำแพร่ตามลำดับการท่วม) ----
@@ -201,12 +173,29 @@ window.IVViews = (function () {
     $("btnDesignEvent").addEventListener("click", function () { stopPlay(); $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevel(); });
     $("btnPlayFlood").addEventListener("click", playFlood);
     $("togFlow").addEventListener("change", function () { if (IV3D.setFlow) IV3D.setFlow(this.checked); });
-    applyLevel();                      // ตั้งระดับน้ำเริ่มต้นจากสไลเดอร์
 
-    setMode("swipe");
+    // ---- ดึงค่าจริง (เขื่อน/ฝน) เหมือนหน้า 3D ----
+    var bLive = $("btnLive"), liveStatus = $("liveStatus");
+    if (bLive) bLive.addEventListener("click", function () {
+      bLive.disabled = true; bLive.innerHTML = '<i class="ti ti-loader"></i> กำลังดึง...';
+      Promise.resolve(window.YalaLive ? YalaLive.fetchLive() : { data: null }).then(function (rep) {
+        var dam = rep && rep.data ? rep.data.storage : null, rain = rep && rep.data ? rep.data.rainfall : null;
+        if (dam != null) $("sDam").value = Math.round(dam);
+        if (rain != null) $("sRain").value = Math.min(100, Math.max(0, Math.round(rain)));
+        stopPlay(); applyLevel();
+        liveStatus.innerHTML = (dam != null || rain != null)
+          ? 'ค่าจริง · เขื่อน ' + (dam != null ? dam.toFixed(0) + '%' : '–') + ' · ฝน ' + (rain != null ? rain.toFixed(1) + ' mm/hr' : '–') + ' → กด "จำลองการท่วม"'
+          : 'ดึงค่าจริงไม่ได้ — ปรับสไลเดอร์เองได้';
+      }).catch(function () { liveStatus.textContent = 'ดึงค่าจริงไม่ได้ — ปรับสไลเดอร์เองได้'; })
+        .then(function () { bLive.disabled = false; bLive.innerHTML = '<i class="ti ti-rss"></i> ดึงค่าปัจจุบันจริง'; });
+    });
+
+    applyLevel();                      // ตั้งระดับน้ำเริ่มต้นจากสไลเดอร์
+    switchView("3d");                  // มุมมองหลัก = 3D
   }
 
   // ================= สลับมุมมอง 2D/3D =================
+  var fellBack3d = false;
   function switchView(v) {
     if (v === view) return; view = v;
     $("vw2d").classList.toggle("active", v === "2d");
@@ -215,7 +204,7 @@ window.IVViews = (function () {
     if (v === "3d") {
       d3.style.display = "block";
       if (m2) m2.style.visibility = "hidden";       // กัน Leaflet โผล่ทะลุ canvas 3D
-      if (!mount3dFn) { mount3dFn = true; IV3D.mount(d3, meta); }
+      if (!mount3dFn) { mount3dFn = true; IV3D.mount(d3, meta, on3dUnavailable); }
       else IV3D.show && IV3D.show();
     } else {
       d3.style.display = "none";
@@ -224,9 +213,16 @@ window.IVViews = (function () {
       draw2D();
     }
   }
+  // ถ้า 3D เรนเดอร์ไม่ได้ (ไม่มี WebGL2) → กลับมา 2D อัตโนมัติ
+  function on3dUnavailable() {
+    if (fellBack3d) return; fellBack3d = true;
+    if (view === "3d") switchView("2d");
+    var ls = $("liveStatus"); if (ls) { /* no-op */ }
+    var b = $("vw3d"); if (b) b.title = "มุมมอง 3D ต้องใช้ WebGL2 (เบราว์เซอร์นี้ไม่รองรับ) — กำลังแสดง 2D";
+  }
 
-  return { mount: mount, redraw2D: draw2D, getMode: function () { return mode; }, getView: function () { return view; } };
+  return { mount: mount, redraw2D: draw2D, getView: function () { return view; } };
 })();
 
 // IV3D ถูกนิยามใน intervention_3d.js (Stage 3) — กันพังถ้ายังไม่โหลด
-window.IV3D = window.IV3D || { mount: function (el) { el.innerHTML = '<div style="position:absolute;inset:0;display:grid;place-items:center;color:#64748b;font:600 13px Sarabun,sans-serif;background:#f8fafc;">กำลังเตรียมมุมมอง 3D…</div>'; }, onUpdate: function () {}, setFlow: function () {}, show: function () {}, hide: function () {} };
+window.IV3D = window.IV3D || { mount: function (el, _meta, onFail) { if (onFail) setTimeout(onFail, 50); }, onUpdate: function () {}, setFlow: function () {}, show: function () {}, hide: function () {} };

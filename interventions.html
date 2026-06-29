@@ -107,6 +107,15 @@
     .lvl-play:hover { background:#0a2f57; }
     .lvl-play.playing { background:#b91c1c; }
     .lvl-play.playing:hover { background:#991b1b; }
+    .lvl-live { width:100%; border:1px solid #bae6fd; background:#f0f9ff; color:#0369a1;
+      font:600 11.5px 'Sarabun',sans-serif; padding:6px 10px; border-radius:8px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:6px; }
+    .lvl-live:hover { background:#e0f2fe; } .lvl-live:disabled { opacity:.6; cursor:default; }
+    .lvl-livestatus { font-size:10px; color:var(--ink-500); margin:5px 0 9px; line-height:1.4; }
+    .prot-result { margin-top:8px; padding:9px 11px; border-radius:9px; background:#f0f9ff;
+      border:1px solid #bae6fd; font-size:12px; color:var(--ink-700); line-height:1.55; }
+    .prot-result b { color:#047857; } .prot-result.none { background:#f8fafc; border-color:var(--line); }
+    .prot-result.none b { color:var(--ink-600); }
   </style>
 </head>
 <body>
@@ -134,30 +143,17 @@
   <div class="app-main">
     <div class="map-col">
       <div class="map-wrap">
-        <div class="map-badge"><i class="ti ti-tools"></i> จำลองน้ำท่วม ก่อน–หลังสร้างโครงสร้าง</div>
+        <div class="map-badge"><i class="ti ti-building-skyscraper"></i> เมือง 3D · จำลองน้ำท่วมเมื่อมีสิ่งก่อสร้าง</div>
         <div id="map"></div>
         <div id="map3d" style="position:absolute;inset:0;display:none;z-index:500;"></div>
         <div class="vw-toggle">
-          <button id="vw2d" class="active">2D</button>
-          <button id="vw3d">3D</button>
-        </div>
-        <div class="cmp-side b" id="cmpSideB">ก่อนสร้าง</div>
-        <div class="cmp-side a" id="cmpSideA" style="display:none;">หลังสร้าง</div>
-        <div class="cmp-bar">
-          <div class="cmp-modes">
-            <button id="cmpBefore">ก่อน</button>
-            <button id="cmpSwipe" class="active">เทียบ</button>
-            <button id="cmpAfter">หลัง</button>
-          </div>
-          <div class="cmp-swipe" id="cmpSwipeWrap">
-            <span class="lab-b">ก่อน</span>
-            <input type="range" id="cmpSplit" min="0" max="100" value="50">
-            <span class="lab-a">หลัง</span>
-          </div>
+          <button id="vw2d">2D</button>
+          <button id="vw3d" class="active">3D</button>
         </div>
         <div class="legend-box">
           <div class="row"><span class="grad"></span> ความลึกน้ำท่วม 0 → 3 ม.</div>
-          <div class="row"><span class="dot" style="background:#34d399"></span> พื้นที่ที่ <b>หายจากน้ำท่วม</b> หลังสร้าง</div>
+          <div class="row"><span class="grad" style="background:linear-gradient(90deg,#cfe8ff,#9ec9f0,#f6c66b,#ef8e4d,#d6452e);"></span> ความสูงอาคาร (3D)</div>
+          <div class="row"><span class="dot" style="background:#34d399"></span> พื้นที่ที่ <b>มาตรการกันน้ำได้</b></div>
           <div class="row"><span class="dot" style="background:#2563eb"></span> แนวคันกั้นที่เปิดใช้งาน</div>
           <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยง · <span class="dot" style="background:#ea580c"></span> คอขวด · <span class="dot" style="background:#0d9488"></span> แก้มลิง</div>
         </div>
@@ -178,9 +174,22 @@
       </section>
 
       <section class="card" style="margin-top:14px;">
+        <div class="card-head"><i class="ti ti-shield-half"></i><h2>มาตรการป้องกัน</h2><span class="sub">เปิด/ปิด</span></div>
+        <div class="card-body">
+          <p style="margin:0 0 9px;font-size:11.5px;color:var(--ink-600);line-height:1.5;">
+            เลือกเปิดมาตรการที่จะสร้าง แล้วกด <b>จำลองการท่วม</b> ด้านล่าง — น้ำจะท่วมโดยมีสิ่งก่อสร้างอยู่</p>
+          <div id="structToggles"><div style="font-size:12px;color:var(--ink-400);">กำลังโหลดเครื่องจำลอง…</div></div>
+          <div class="prot-result none" id="protResult" style="display:none;"></div>
+          <p id="cmpPump" style="margin:8px 0 0;font-size:11px;color:#b45309;line-height:1.5;display:none;"></p>
+        </div>
+      </section>
+
+      <section class="card" style="margin-top:14px;">
         <div class="card-head"><i class="ti ti-adjustments-bolt"></i><h2>จำลองระดับน้ำ</h2><span class="sub">ฝน/แม่น้ำ/เขื่อน</span></div>
         <div class="card-body">
           <div class="lvl-readout">ระดับน้ำ <b id="lvlStage">–</b> ม.รทก. <span id="lvlTag" class="lvl-tag"></span></div>
+          <button id="btnLive" class="lvl-live"><i class="ti ti-rss"></i> ดึงค่าปัจจุบันจริง</button>
+          <div class="lvl-livestatus" id="liveStatus">เขื่อนบางลาง + ฝนยะลา (ThaiWater · Open-Meteo)</div>
           <div class="lvl-row"><span class="lvl-lab"><i class="ti ti-cloud-rain"></i> ฝน</span>
             <input type="range" id="sRain" min="0" max="100" value="40"><span class="lvl-val" id="vRain">40</span></div>
           <div class="lvl-row"><span class="lvl-lab"><i class="ti ti-ripple"></i> แม่น้ำ</span>
@@ -194,31 +203,6 @@
           <button id="btnPlayFlood" class="lvl-play"><i class="ti ti-player-play-filled" id="playIcon"></i> <span id="playLabel">จำลองการท่วม</span></button>
           <p style="margin:8px 0 0;font-size:10.5px;color:var(--ink-500);line-height:1.5;">
             กด <b>จำลองการท่วม</b> เพื่อดูน้ำค่อย ๆ ไหลเข้าท่วมตามลำดับ (แม่น้ำ→เมือง) · เปิดคันกั้นแล้วจะเห็นน้ำถูกกั้น/อ้อม</p>
-        </div>
-      </section>
-
-      <section class="card" style="margin-top:14px;">
-        <div class="card-head"><i class="ti ti-building-community"></i><h2>เปรียบเทียบ ก่อน–หลังสร้าง</h2><span class="sub">2D/3D</span></div>
-        <div class="card-body">
-          <p style="margin:0 0 9px;font-size:11.5px;color:var(--ink-600);line-height:1.5;">
-            เหตุการณ์ออกแบบ ระดับ <b id="sStage">–</b> ม.รทก. (พ.ย. 2568) ·
-            เปิดมาตรการที่ต้องการ แล้วโมเดลจะรันซ้ำทันที วัดน้ำที่ลดได้</p>
-          <div id="structToggles"><div style="font-size:12px;color:var(--ink-400);">กำลังโหลดเครื่องจำลอง…</div></div>
-          <div class="cmp-stats" id="cmpStats" style="display:none;">
-            <div class="cmp-stat">
-              <div class="lab"><i class="ti ti-droplet"></i> ปริมาตรน้ำท่วม (ลบ.ม.)</div>
-              <div class="vals"><span class="vb" id="stVolB">–</span><span class="arr"><i class="ti ti-arrow-right"></i></span><span class="va" id="stVolA">–</span><span class="cut" id="stVolCut">–</span></div>
-            </div>
-            <div class="cmp-stat">
-              <div class="lab"><i class="ti ti-map-2"></i> พื้นที่ท่วม (ไร่)</div>
-              <div class="vals"><span class="vb" id="stAreaB">–</span><span class="arr"><i class="ti ti-arrow-right"></i></span><span class="va" id="stAreaA">–</span><span class="cut" id="stAreaCut">–</span></div>
-            </div>
-            <div class="cmp-stat">
-              <div class="lab"><i class="ti ti-building"></i> อาคารถูกน้ำท่วม (หลัง)</div>
-              <div class="vals"><span class="vb" id="stBldB">–</span><span class="arr"><i class="ti ti-arrow-right"></i></span><span class="va" id="stBldA">–</span><span class="cut" id="stBldCut">–</span></div>
-            </div>
-          </div>
-          <p id="cmpPump" style="margin:8px 0 0;font-size:11px;color:#b45309;line-height:1.5;display:none;"></p>
         </div>
       </section>
 
@@ -288,7 +272,6 @@
 
   // summary panel
   fetch('data/intervention_summary.json').then(r=>r.json()).then(s=>{
-    document.getElementById('sStage').textContent = s.design_stage_m;
     var dividerShown = false;
     var html = (s.recommendations||[]).map(function(r){
       var cls = r.kind==='hotspot'?'hot':(r.kind==='bottleneck'?'bot':(r.kind==='retention'?'ret':''));
