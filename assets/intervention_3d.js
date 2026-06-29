@@ -147,20 +147,8 @@ window.IV3D = (function () {
   }
   function updateSplit() { uSplitX = mercXOf(IVCompare.splitLon()); if (map) map.triggerRepaint(); }
 
-  function showFallback(el) {
-    if (el.querySelector(".iv3d-fallback")) return;
-    var f = document.createElement("div");
-    f.className = "iv3d-fallback";
-    f.style.cssText = "position:absolute;inset:0;z-index:2;display:grid;place-items:center;text-align:center;padding:24px;background:#f8fafc;color:#475569;font:500 13px Sarabun,sans-serif;line-height:1.6;";
-    f.innerHTML = '<div><i class="ti ti-cube-off" style="font-size:30px;color:#94a3b8;"></i>' +
-      '<p style="margin:10px 0 4px;font-weight:700;color:#334155;">มุมมอง 3D ต้องใช้ WebGL2</p>' +
-      '<p style="margin:0 0 12px;max-width:340px;">เบราว์เซอร์/สภาพแวดล้อมนี้ยังไม่รองรับ WebGL2 — ใช้มุมมอง <b>2D</b> เปรียบเทียบได้เต็มรูปแบบ ' +
-      'หรือเปิดเมืองจำลอง 3D เต็มหน้าจอ</p>' +
-      '<a href="index.html" target="_blank" style="display:inline-block;background:#0c3b6e;color:#fff;text-decoration:none;font-weight:600;padding:7px 16px;border-radius:8px;">เปิดเมือง 3D เต็มหน้าจอ</a></div>';
-    el.appendChild(f);
-  }
   return {
-    mount: function (el) {
+    mount: function (el, _meta, onFail) {
       var loaded = false;
       try {
         map = new maplibregl.Map({
@@ -170,12 +158,12 @@ window.IV3D = (function () {
             layers: [{ id: "osm", type: "raster", source: "osm" }] },
           center: [101.293, 6.560], zoom: 13.6, pitch: 58, bearing: -22, maxZoom: 19
         });
-      } catch (e) { console.warn("IV3D: สร้างแผนที่ 3D ไม่ได้", e); showFallback(el); return; }
+      } catch (e) { console.warn("IV3D: สร้างแผนที่ 3D ไม่ได้", e); if (onFail) onFail(); return; }
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
       try { new ResizeObserver(function () { map.resize(); }).observe(el); } catch (e) {}
       map.on("error", function (e) { console.warn("IV3D map:", e && e.error && e.error.message); });
       map.on("load", function () { loaded = true; try { buildScene(); } catch (err) { console.warn("IV3D buildScene:", err && err.message); } });
-      setTimeout(function () { if (!loaded) showFallback(el); }, 7000);    // ไม่รองรับ WebGL2 → fallback
+      setTimeout(function () { if (!loaded && onFail) onFail(); }, 7000);    // ไม่มี WebGL2 → กลับมา 2D
     },
     onUpdate: function (kind) {
       if (kind === "after") updateAfterBuffer();
