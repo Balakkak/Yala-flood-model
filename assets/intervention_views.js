@@ -86,7 +86,9 @@ window.IVViews = (function () {
         '<input type="checkbox" data-rank="' + lv.rank + '">' +
         '<div><div class="t"><i class="ti ti-shield-half" style="color:#2563eb;"></i> ' + lv.label + '</div>' +
         '<div class="d">ป้องกัน ~' + lv.protected + ' หลัง · ~' + (lv.cost_thb / 1e6).toFixed(1) + ' ล้าน฿' +
-        (lv.needs_pump ? ' · ต้องมีสถานีสูบ' : '') + '</div></div>';
+        (lv.needs_pump ? ' · ต้องมีสถานีสูบ' : '') +
+        ((lv.bld_under_wall || lv.road_under_wall) ? '<br><span style="color:#b45309;">แนวกำแพงพาดอาคาร ~' + (lv.bld_under_wall || 0) + ' หลัง / ถนน ' + (lv.road_under_wall || 0) + ' จุด</span>' : '') +
+        '</div></div>';
       var cb = el.querySelector("input");
       cb.addEventListener("change", function () {
         el.classList.toggle("on", cb.checked);
@@ -120,10 +122,16 @@ window.IVViews = (function () {
         var p = f.properties, isPond = p.kind === "retention";
         var lng = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
         var icon = isPond ? "ti-droplet" : "ti-windmill", col = isPond ? "#0f766e" : "#c2410c";
-        var detail = isPond
-          ? ("บ่อหน่วง ~" + (p.area_rai || "?") + " ไร่ · เก็บ ~" + ((p.storage_m3 || 0).toLocaleString()) + " ลบ.ม."
-             + (p.buildings_on_site === 0 ? " · ที่ว่างพอ" : (p.buildings_on_site != null ? " · มีอาคาร ~" + p.buildings_on_site + " หลัง" : "")))
-          : ("ความจุระบายปัจจุบัน " + (p.drain_cm != null ? p.drain_cm + " ซม." : "ต่ำ") + " · ควรเพิ่มท่อ/สูบ");
+        var detail;
+        if (isPond) {
+          var land = (p.buildings_on_site === 0 && (p.road_on_site || 0) === 0) ? " · ที่ว่าง ไม่ทับอาคาร/ถนน"
+            : (p.buildings_on_site === 0 ? " · เลี่ยงอาคารแล้ว" + ((p.road_on_site || 0) > 0 ? " (มีถนนพาด)" : "")
+            : (p.buildings_on_site != null ? " · มีอาคาร ~" + p.buildings_on_site + " หลัง" : ""));
+          detail = "บ่อหน่วง ~" + (p.area_rai || "?") + " ไร่ · เก็บ ~" + ((p.storage_m3 || 0).toLocaleString()) + " ลบ.ม." + land;
+        } else {
+          var spot = p.relocated ? " · ขยับเลี่ยงอาคารแล้ว" : (p.on_road ? " · ตั้งริมถนนได้" : "");
+          detail = "ความจุระบายปัจจุบัน " + (p.drain_cm != null ? p.drain_cm + " ซม." : "ต่ำ") + " · ควรเพิ่มท่อ/สูบ" + spot;
+        }
         var row = document.createElement("div");
         row.className = "struct-info";
         row.innerHTML = '<i class="ti ' + icon + '" style="color:' + col + ';margin-top:1px;"></i>'

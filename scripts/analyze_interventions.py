@@ -131,6 +131,32 @@ for f in J("yala_buildings.geojson")["features"]:
         bld[r * NC + c] += 1
 print(f"อาคารในกริด {int(bld.sum())} · เซลล์เมือง {inStudy.sum()}")
 
+# ---------- 4a) ถนน → road mask (rasterize LineString ลงเซลล์ 30 ม.) ----------
+# ใช้คัด/หลีกตำแหน่งสิ่งก่อสร้าง: บ่อหน่วง/สูบ ไม่ควรทับถนน · คันกั้นรายงานจุดที่พาดถนน
+road_cell = np.zeros(N, dtype=bool)
+def fcol(lon): return (lon - OLON) / DLON
+def frow(lat): return (OLAT - lat) / DLAT
+try:
+    for f in J("yala_roads.geojson")["features"]:
+        g = f.get("geometry") or {}
+        if g.get("type") != "LineString":
+            continue
+        co = g["coordinates"]
+        for a, b in zip(co, co[1:]):
+            c0, r0 = fcol(a[0]), frow(a[1]); c1, r1 = fcol(b[0]), frow(b[1])
+            steps = int(max(abs(c1 - c0), abs(r1 - r0)) * 2) + 1
+            for s in range(steps + 1):
+                t = s / steps
+                cc = int(c0 + (c1 - c0) * t); rr = int(r0 + (r1 - r0) * t)
+                if 0 <= rr < NR and 0 <= cc < NC:
+                    road_cell[rr * NC + cc] = True
+except Exception as e:
+    print("  (ข้ามชั้นถนน:", e, ")")
+
+# occupied = เซลล์ที่ "มีอาคาร หรือ ถนนพาด" → ใช้ไม่ได้สำหรับบ่อหน่วง/สูบ
+occupied = (bld > 0) | road_cell
+print(f"ถนน {int(road_cell.sum())} เซลล์ · occupied {int(occupied.sum())} · ว่างในเมือง {int((inStudy & ~occupied).sum())}")
+
 # ---------- 4b) น้ำท่วมจริง GISTDA (โพลิกอนดาวเทียม) → observed mask (ถ่วงน้ำหนัก hotspot) ----------
 observed = np.zeros(N, dtype=bool)
 def each_poly(geom, cb):
@@ -279,8 +305,12 @@ def levee_for_zone(z):
     # (โมเดล connectivity จะโชว์ภายใน "แห้ง" เพราะตัดการเชื่อม แต่ความเป็นจริงต้องมีสถานีสูบระบายน้ำใน)
     needs_pump = True
     cost = length_m * LEVEE_RATE + (PUMP_COST if needs_pump else 0)
+    # แนวคันกั้นถูกบังคับด้วยรูปทรงพื้นที่ที่ต้องล้อม — ย้ายไปที่ว่างไม่ได้ จึง "รายงาน" จุดที่พาดอาคาร/ถนนแทน
+    bld_under_wall = int(sum(bld[i] for i in perim))
+    road_under_wall = int(sum(1 for i in perim if road_cell[i]))
     return {"before": before, "after": after, "protected": max(0, before - after),
             "polygon": poly, "length_m": length_m, "needs_pump": needs_pump, "cost": cost,
+            "bld_under_wall": bld_under_wall, "road_under_wall": road_under_wall,
             "wall_cells": [int(i) for i in perim]}     # เซลล์ที่ยกเป็นคันกั้น (ให้ engine ฝั่งเว็บรันซ้ำ)
 
 for z in zones:
@@ -290,7 +320,12 @@ if levee:
     print(f"levee @ zone#1: ก่อน {levee['before']} → หลัง {levee['after']} · ป้องกัน {levee['protected']}"
           + (" (ต้องมีสูบร่วม)" if levee["needs_pump"] else ""))
 
-# ---------- 7) แก้มลิง/บ่อหน่วงน้ำ ที่จุด flow-accumulation สูงสุด ----------
+# เซลล์ที่ "ถูกจองแล้ว" โดยคันกั้น → สิ่งก่อสร้างอื่นห้ามทับ (กันชนกันเอง)
+levee_wall = set()
+for z in zones:
+    levee_wall.update(z["levee"]["wall_cells"])
+
+# ---------- 7) แก้มลิง/บ่อหน่วงน้ำ ที่จุด flow-accumulation สูงสุด (เลือกบน "ที่ว่าง") ----------
 pond_thr = np.percentile(flowAcc[inStudy], 99)
 pl, pn = components(inStudy & (flowAcc >= pond_thr) & reach)
 ponds = []
@@ -298,20 +333,54 @@ for k in range(pn):
     cells = np.where(pl == k)[0]
     if len(cells) < 4:
         continue
-    rs = cells // NC; cs = cells % NC
+    # แยกเซลล์ "ว่างจริง" (ไม่มีอาคาร ไม่มีถนน ไม่ทับคันกั้น) = ส่วนที่สร้างบ่อได้
+    free = [int(i) for i in cells if not occupied[i] and int(i) not in levee_wall]
+    bld_on_site = int(bld[cells].sum())                 # อาคารบนพื้นที่บ่อ → "สร้างได้ไหม"
+    road_on_site = int(sum(1 for i in cells if road_cell[i]))
+    occ_frac = round(1 - len(free) / len(cells), 2)     # สัดส่วนถูกอาคาร/ถนนทับ (0=ว่างหมด)
+    use = free if len(free) >= 4 else [int(i) for i in cells]   # ใช้เซลล์ว่างคิดที่ตั้ง/ความจุ
+    rs = [i // NC for i in use]; cs = [i % NC for i in use]
     lon = float(np.mean([lonOf(c) for c in cs])); lat = float(np.mean([latOf(r) for r in rs]))
-    area_m2 = len(cells) * 900
-    storage = area_m2 * POND_DEPTH                      # ลบ.ม.
-    bld_on_site = int(bld[cells].sum())                 # อาคารที่ตั้งบนพื้นที่บ่อจริง → ตัวชี้วัด "สร้างได้ไหม"
+    area_m2 = len(free) * 900                            # ความจุคิดจากพื้นที่ "ว่าง" เท่านั้น
+    storage = area_m2 * POND_DEPTH
     ponds.append({"lon": lon, "lat": lat, "flowacc": float(flowAcc[cells].max()),
                   "area_rai": round(area_m2 / 1600), "storage_m3": int(storage),
                   "cost": int(storage * POND_RATE), "bld_on_site": bld_on_site,
-                  "near_buildings": buildings_near(int(cells[len(cells) // 2]))})
-# เลือก "จุดที่สร้างได้จริงก่อน" : ที่ดินว่าง/อาคารน้อยมาก่อน แล้วจึงดูปริมาณน้ำที่มารวม (flowacc)
-# (จุด flowacc สูงสุดมักอยู่กลางเมืองที่มีอาคารทับ — แนะนำไปก็สร้างไม่ได้ถ้าไม่เวนคืน)
-ponds.sort(key=lambda p: (p["bld_on_site"], -p["flowacc"]))
+                  "road_on_site": road_on_site, "occ_frac": occ_frac, "free_cells": len(free),
+                  "near_buildings": buildings_near(int(use[len(use) // 2]))})
+# เลือก "จุดที่สร้างได้จริงก่อน": ทับอาคาร/ถนนน้อยที่สุดก่อน แล้วจึงดูปริมาณน้ำที่มารวม (flowacc)
+# ต้องมีที่ว่างพอสร้างจริง (≥4 เซลล์ ≈ 0.2 ไร่ขึ้นไป) มิฉะนั้นข้าม
+ponds = [p for p in ponds if p["free_cells"] >= 4]
+ponds.sort(key=lambda p: (p["occ_frac"], -p["flowacc"]))
 ponds = ponds[:3]
-print(f"retention ponds (top {len(ponds)}): " + ", ".join(f"flowAcc{round(p['flowacc'])}/อาคารบนบ่อ{p['bld_on_site']}" for p in ponds))
+print(f"retention ponds (top {len(ponds)}): " + ", ".join(
+    f"flowAcc{round(p['flowacc'])}/ว่าง{p['free_cells']}ช่อง/ทับถนน{p['road_on_site']}" for p in ponds))
+
+# ---------- 7b) ขยับจุด "สูบ/ท่อ" (คอขวด) ไปที่ว่างข้างเคียง (ไม่ทับอาคาร/คันกั้น) ----------
+# คอขวดมักอยู่บนแนวถนน/ร่องน้ำ — ตัวสถานีสูบ/บ่อพักต้องมีที่ตั้งข้างทาง จึง snap ไปเซลล์ว่างใกล้สุด
+def nearest_free(r0, c0, rad=4):
+    best, bd = None, 1e9
+    for r in range(max(0, r0 - rad), min(NR, r0 + rad + 1)):
+        for c in range(max(0, c0 - rad), min(NC, c0 + rad + 1)):
+            i = r * NC + c
+            if valid[i] and not (bld[i] > 0) and i not in levee_wall:   # ยอมให้อยู่ริมถนนได้ แต่ไม่ทับอาคาร
+                d = (r - r0) ** 2 + (c - c0) ** 2
+                if d < bd:
+                    bd, best = d, i
+    return best
+for b in bottlenecks:
+    r0, c0 = rowOf(b["lat"]), colOf(b["lon"])
+    on_road = bool(0 <= r0 < NR and 0 <= c0 < NC and road_cell[r0 * NC + c0])
+    on_bld = bool(0 <= r0 < NR and 0 <= c0 < NC and bld[r0 * NC + c0] > 0)
+    b["on_road"] = on_road
+    if on_bld:                                   # ทับอาคาร → ย้ายไปที่ว่างใกล้สุด
+        nf = nearest_free(r0, c0)
+        if nf is not None:
+            b["lat"] = latOf(nf // NC); b["lon"] = lonOf(nf % NC); b["relocated"] = True
+        else:
+            b["relocated"] = False
+    else:
+        b["relocated"] = False
 
 def per_million(benefit, cost):
     return round(benefit / (cost / 1e6), 2) if cost else 0.0
@@ -329,19 +398,26 @@ for rank, z in enumerate(zones, 1):
                        "label": f"จุดเสี่ยงอันดับ {rank}",
                        "rationale": f"ท่วม ~{z['depth_mean']} ม. · อาคารโดน {z['buildings']} หลัง · คันกั้นป้องกันได้ ~{lv['protected']} หลัง"}})
 for i, b in enumerate(bottlenecks, 1):
+    site = ("ย้ายจุดติดตั้งไปที่ว่างข้างเคียง (เลี่ยงอาคาร)" if b.get("relocated")
+            else ("อยู่บนแนวถนน — ตั้งบ่อพัก/สูบริมทางได้" if b.get("on_road") else "มีที่ว่างติดตั้ง"))
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(b["lon"], 6), round(b["lat"], 6)]},
         "properties": {"kind": "bottleneck", "rank": i, "drain_cm": b["drain_cm"], "cost_thb": DRAIN_COST,
+                       "on_road": b.get("on_road", False), "relocated": b.get("relocated", False),
                        "label": f"คอขวดระบายน้ำ {i}",
-                       "rationale": f"น้ำไหลมารวมสูง แต่ความจุระบายเพียง {b['drain_cm']} ซม. → ควรเพิ่มท่อ/สูบ"}})
+                       "rationale": f"น้ำไหลมารวมสูง แต่ความจุระบายเพียง {b['drain_cm']} ซม. → ควรเพิ่มท่อ/สูบ · {site}"}})
 for i, p in enumerate(ponds, 1):
-    feas = ("พื้นที่ว่างพอ (อาคารบนพื้นที่ ~0)" if p["bld_on_site"] == 0
-            else f"⚠ มีอาคาร ~{p['bld_on_site']} หลังบนพื้นที่ — ต้องจัดหาที่ดิน/เวนคืน")
+    if p["bld_on_site"] == 0 and p["road_on_site"] == 0:
+        feas = "พื้นที่ว่าง ไม่ทับอาคาร/ถนน"
+    elif p["bld_on_site"] == 0:
+        feas = f"เลี่ยงอาคารได้ · มีถนนพาด ~{p['road_on_site']} ช่อง (คิดความจุจากที่ว่างแล้ว)"
+    else:
+        feas = f"⚠ มีอาคาร ~{p['bld_on_site']} หลังบนพื้นที่ — ต้องจัดหาที่ดิน/เวนคืน"
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(p["lon"], 6), round(p["lat"], 6)]},
         "properties": {"kind": "retention", "rank": i, "area_rai": p["area_rai"],
                        "storage_m3": p["storage_m3"], "cost_thb": p["cost"],
-                       "buildings_on_site": p["bld_on_site"],
+                       "buildings_on_site": p["bld_on_site"], "road_on_site": p["road_on_site"],
                        "label": f"แก้มลิง/บ่อหน่วงน้ำ {i}",
                        "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม. · {feas}"}})
 for rank, z in enumerate(zones, 1):
@@ -352,9 +428,11 @@ for rank, z in enumerate(zones, 1):
             "geometry": {"type": "Polygon", "coordinates": [[[p[0], p[1]] for p in ring]]},
             "properties": {"kind": "levee", "rank": rank, "protects_buildings": lv["protected"],
                            "area_rai": z["area_rai"], "needs_pump": lv["needs_pump"], "cost_thb": lv["cost"],
-                           "length_m": lv["length_m"],
+                           "length_m": lv["length_m"], "bld_under_wall": lv["bld_under_wall"],
+                           "road_under_wall": lv["road_under_wall"],
                            "label": f"แนวคันกั้นน้ำรอบจุดเสี่ยงอันดับ {rank}",
-                           "rationale": f"ล้อมคันกั้น{'+สูบ' if lv['needs_pump'] else ''} → ป้องกัน ~{lv['protected']} หลัง"}})
+                           "rationale": f"ล้อมคันกั้น{'+สูบ' if lv['needs_pump'] else ''} → ป้องกัน ~{lv['protected']} หลัง"
+                                        + (f" · แนวกำแพงพาดอาคาร ~{lv['bld_under_wall']} หลัง / ถนน {lv['road_under_wall']} จุด (ต้องจัดแนว/เวนคืนบางส่วน)" if (lv['bld_under_wall'] or lv['road_under_wall']) else " · แนวกำแพงไม่ทับอาคาร/ถนนหลัก")}})
 
 fc = {"type": "FeatureCollection", "name": "intervention_candidates",
       "_meta": {"design_stage_m": DESIGN_S, "method": "Priority-Flood screening on FABDEM 30m",
@@ -394,6 +472,7 @@ sim = {
             "before": z["levee"]["before"], "after": z["levee"]["after"],
             "protected": z["levee"]["protected"],
             "needs_pump": z["levee"]["needs_pump"], "cost_thb": z["levee"]["cost"],
+            "bld_under_wall": z["levee"]["bld_under_wall"], "road_under_wall": z["levee"]["road_under_wall"],
         }
         for rank, z in enumerate(zones, 1)
     ],
@@ -424,11 +503,13 @@ for p in ponds:
                  "benefit_per_million": None,
                  "nearby_buildings": p["near_buildings"],
                  "buildings_on_site": p["bld_on_site"],   # อาคารบนพื้นที่บ่อ → ใช้เตือน feasibility
-                 "expected": f"หน่วงน้ำ ~{p['storage_m3']:,} ลบ.ม. ลดยอดน้ำท่วมท้ายน้ำ (ปริมาตรจริงต้อง SWMM)"})
+                 "road_on_site": p["road_on_site"],       # ถนนพาดพื้นที่บ่อ → คิดความจุจากที่ว่างแล้ว
+                 "expected": f"หน่วงน้ำ ~{p['storage_m3']:,} ลบ.ม. (คิดจากที่ว่าง) ลดยอดน้ำท่วมท้ายน้ำ (ปริมาตรจริงต้อง SWMM)"})
 for i, b in enumerate(bottlenecks, 1):
     recs.append({"type": "คอขวดระบายน้ำ (bottleneck)", "kind": "bottleneck",
                  "where": f"{b['lat']:.3f}, {b['lon']:.3f}", "drain_cm": b["drain_cm"],
-                 "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
+                 "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด"
+                           + (" (ขยับจุดติดตั้งเลี่ยงอาคารแล้ว)" if b.get("relocated") else ""),
                  "protects_buildings": None, "cost_thb": DRAIN_COST,
                  "benefit_per_million": None,
                  "expected": "ระบายน้ำที่มารวมได้เร็วขึ้น ลดความลึก/ระยะเวลาท่วม"})
