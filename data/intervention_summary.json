@@ -113,8 +113,8 @@
     {
       "type": "คอขวดระบายน้ำ (bottleneck)",
       "kind": "bottleneck",
-      "where": "6.527, 101.275",
-      "drain_cm": 4,
+      "where": "6.547, 101.271",
+      "drain_cm": 0,
       "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
       "protects_buildings": null,
       "cost_thb": 2000000,
@@ -125,9 +125,9 @@
     {
       "type": "คอขวดระบายน้ำ (bottleneck)",
       "kind": "bottleneck",
-      "where": "6.526, 101.275",
-      "drain_cm": 4,
-      "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด (ขยับจุดติดตั้งเลี่ยงอาคารแล้ว)",
+      "where": "6.541, 101.261",
+      "drain_cm": 0,
+      "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
       "protects_buildings": null,
       "cost_thb": 2000000,
       "benefit_per_million": null,
@@ -137,7 +137,7 @@
     {
       "type": "คอขวดระบายน้ำ (bottleneck)",
       "kind": "bottleneck",
-      "where": "6.526, 101.276",
+      "where": "6.558, 101.266",
       "drain_cm": 0,
       "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
       "protects_buildings": null,
@@ -149,7 +149,7 @@
     {
       "type": "คอขวดระบายน้ำ (bottleneck)",
       "kind": "bottleneck",
-      "where": "6.547, 101.271",
+      "where": "6.558, 101.258",
       "drain_cm": 0,
       "measure": "เพิ่มท่อ/คูระบาย หรือสถานีสูบ ณ จุดคอขวด",
       "protects_buildings": null,

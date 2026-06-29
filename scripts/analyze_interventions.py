@@ -20,7 +20,7 @@ analyze_interventions.py — วิเคราะห์ "จุดที่ค�
   5) levee/dike = ล้อมพื้นที่ hotspot อันดับ 1 ด้วยคันกั้น → รัน Priority-Flood ซ้ำ →
      นับอาคารที่หลุดจากโซนน้ำท่วม (ผลก่อน-หลังจริงจากโมเดล)
 """
-import json, os, heapq
+import json, os, heapq, math
 import numpy as np
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -46,6 +46,22 @@ def colOf(lon): return int((lon - OLON) / DLON)
 def rowOf(lat): return int((OLAT - lat) / DLAT)
 
 NB = [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]
+
+# ---------- กันแนะนำซ้ำในจุดเดียว: ตัดจุดที่อยู่ใกล้จุดอันดับสูงกว่าเกินไป (non-max suppression) ----------
+# จุด flowAcc สูงมักเกาะกลุ่มในร่องระบายเดียวกัน → ถ้าไม่กรองจะได้สูบ/บ่อ 4-5 จุดทับซ้อนใน ~400 ม.
+MIN_SPACING_M = 500       # ระยะห่างขั้นต่ำระหว่างมาตรการชนิดเดียวกัน (ปรับได้)
+def dedupe_spatial(items, minm=MIN_SPACING_M):
+    kept = []
+    for it in items:                                      # items ต้องเรียงตามลำดับความสำคัญมาก่อนแล้ว
+        ok = True
+        for k in kept:
+            dx = (it["lon"] - k["lon"]) * 111320.0 * math.cos(math.radians(it["lat"]))
+            dy = (it["lat"] - k["lat"]) * 111320.0
+            if dx * dx + dy * dy < minm * minm:
+                ok = False; break
+        if ok:
+            kept.append(it)
+    return kept
 
 # ---------- 1) Priority-Flood (minimax) จาก channel ----------
 def priority_flood(elev, seeds):
@@ -277,8 +293,8 @@ for k in range(bn):
                         "drain_cm": int(np.median(drain_cm[cells])),
                         "n": len(cells)})
 bottlenecks.sort(key=lambda b: -b["flowacc"])
-bottlenecks = bottlenecks[:5]
-print(f"bottlenecks (top {len(bottlenecks)})")
+bottlenecks = dedupe_spatial(bottlenecks)[:5]      # เว้นระยะ ≥500 ม. กันแนะนำซ้ำในร่องเดียวกัน
+print(f"bottlenecks (top {len(bottlenecks)} หลังเว้นระยะ ≥{MIN_SPACING_M} ม.)")
 
 # ---------- ต้นทุนคร่าว ๆ (สมมุติเพื่อจัดลำดับ benefit/cost — ไม่ใช่ราคาออกแบบจริง) ----------
 LEVEE_RATE = 30000        # บาท/เมตร (กำแพง/คันกั้น)
@@ -365,7 +381,7 @@ for k in range(pn):
 # ต้องมีที่ว่างพอสร้างจริง (≥4 เซลล์ ≈ 0.2 ไร่ขึ้นไป) มิฉะนั้นข้าม
 ponds = [p for p in ponds if p["free_cells"] >= 4]
 ponds.sort(key=lambda p: (p["occ_frac"], -p["flowacc"]))
-ponds = ponds[:3]
+ponds = dedupe_spatial(ponds)[:3]                  # เว้นระยะ ≥500 ม. กันบ่อหน่วงซ้อนจุดเดียว
 print(f"retention ponds (top {len(ponds)}): " + ", ".join(
     f"flowAcc{round(p['flowacc'])}/ว่าง{p['free_cells']}ช่อง/ทับถนน{p['road_on_site']}" for p in ponds))
 
