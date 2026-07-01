@@ -59,7 +59,6 @@ lisflood/                      โมเดล LISFLOOD (inputs, src, run.sh) + 
 terrain/                       terrain tiles สำหรับมุมมอง 3D
 docs/                          เอกสารโปรเจกต์ + data_checklist_yala.xlsx (เช็กลิสต์แหล่งข้อมูล)
 raw/                           ข้อมูลดิบ/ตัวกลางขนาดใหญ่ (zip, tar.gz, overpass)
-legacy/                        เดโมเวอร์ชันเก่าที่เลิกใช้แล้ว (รวม sphere-map.html)
 ```
 
 ## วิธีวิเคราะห์ (สรุป)
