@@ -122,6 +122,7 @@
       border:1px solid; transform:translateY(-2px); }
     .iv3d-marker.bottleneck { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
     .iv3d-marker.retention { background:#f0fdfa; color:#0f766e; border-color:#99f6e4; }
+    .iv3d-marker.floodgate { background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe; }
     /* รายการมาตรการเชิงข้อมูล (คอขวด/แก้มลิง) ในการ์ด toggle */
     .info-divider { margin:11px 0 8px; padding-top:10px; border-top:1px dashed var(--line);
       font:600 10.5px 'Sarabun',sans-serif; color:var(--ink-500); display:flex; align-items:flex-start; gap:6px; line-height:1.45; }
@@ -169,7 +170,7 @@
           <div class="row"><span class="grad" style="background:linear-gradient(90deg,#cfe8ff,#9ec9f0,#f6c66b,#ef8e4d,#d6452e);"></span> ความสูงอาคาร (3D)</div>
           <div class="row"><span class="dot" style="background:#34d399"></span> พื้นที่ที่ <b>มาตรการกันน้ำได้</b></div>
           <div class="row"><span class="dot" style="background:#9ca3af"></span> กำแพงคันกั้น 3D (ตามแนวจริง) · <span class="dot" style="background:#2563eb"></span> โซนป้องกันได้</div>
-          <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยง · <span class="dot" style="background:#ea580c"></span> คอขวด · <span class="dot" style="background:#0d9488"></span> แก้มลิง</div>
+          <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยง · <span class="dot" style="background:#ea580c"></span> คอขวด · <span class="dot" style="background:#0d9488"></span> แก้มลิง · <span class="dot" style="background:#7c3aed"></span> ประตูระบาย/สูบ</div>
         </div>
       </div>
     </div>
@@ -230,6 +231,12 @@
         <span>ผลเป็นระดับ <b>screening</b> บน DEM FABDEM 30 ม. (±5 ม.) — ใช้ <b>เลือกจุด/เทียบมาตรการ</b> ได้
           แต่การออกแบบขนาดจริง (ท่อ/บ่อ/return period) ต้องใช้ <b>HEC-RAS 2D + EPA SWMM + LiDAR</b></span>
       </div>
+      <div class="sim-disclaimer" style="margin:6px 0 4px;background:#faf5ff;border-color:#e9d5ff;">
+        <i class="ti ti-scale" style="color:#7c3aed;"></i>
+        <span><b>หลัก No-Adverse-Impact / กฎหมาย:</b> โครงสร้างต้องไม่ยกระดับน้ำหรือผลักน้ำไปฝั่งตรงข้าม/ท้ายน้ำ/บ้านข้างเคียง
+          (no-rise · EIA) — โมเดล connectivity นี้<b>ประเมินผลกระทบท้ายน้ำไม่ได้</b> ต้องยืนยันด้วย <b>HEC-RAS 2D</b>
+          · แต่ละหมุดกดดู <b>องค์ประกอบที่ต้องมีตามมาตรฐาน</b> ได้</span>
+      </div>
     </aside>
   </div>
 </div>
@@ -242,6 +249,14 @@
 <script src="assets/intervention_3d.js"></script>
 <script>
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+  // checklist หลักการออกแบบ+กฎหมาย ในป็อปอัพ (จาก design_req/std ของแต่ละโครงสร้าง)
+  function reqHtml(p){
+    if(!p || !p.design_req || !p.design_req.length) return '';
+    var items = p.design_req.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('');
+    return '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e7eb;">'
+      + '<div style="font-size:10.5px;font-weight:700;color:#7c3aed;">องค์ประกอบที่ต้องมี ('+esc(p.std||'')+')</div>'
+      + '<ul style="margin:3px 0 0;padding-left:16px;font-size:10.5px;color:#475569;line-height:1.5;">'+items+'</ul></div>';
+  }
   // clock
   (function(){ var el=document.getElementById('clock'); function t(){ var d=new Date(),p=n=>String(n).padStart(2,'0'); el.textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); } t(); setInterval(t,1000); })();
   if (window.YalaLive) YalaLive.fetchLive();
@@ -262,7 +277,7 @@
       var p=f.properties, g=f.geometry;
       if(p.kind==='levee' && g.type==='LineString'){
         L.geoJSON(f, { style:{ color:'#78716c', weight:5, opacity:0.9 } })
-          .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+(p.needs_pump?'<br><span style="color:#b45309">* ต้องมีประตูระบาย/สถานีสูบที่ปากท่อ</span>':''))
+          .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+reqHtml(p))
           .addTo(map);
         g.coordinates.forEach(c=>bounds.push([c[1],c[0]]));
       } else if(g.type==='Point'){
@@ -273,10 +288,14 @@
           L.marker([lat,lon]).addTo(map).bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale));
         } else if(p.kind==='bottleneck'){
           L.circleMarker([lat,lon], { radius:8, color:'#fff', weight:2, fillColor:'#ea580c', fillOpacity:0.95 })
-            .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)).addTo(map);
+            .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+reqHtml(p)).addTo(map);
         } else if(p.kind==='retention'){
           L.circleMarker([lat,lon], { radius:9, color:'#fff', weight:2, fillColor:'#0d9488', fillOpacity:0.95 })
-            .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)).addTo(map);
+            .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+reqHtml(p)).addTo(map);
+        } else if(p.kind==='floodgate'){
+          L.marker([lat,lon]).addTo(map)
+            .bindPopup('<b>'+esc(p.label)+'</b><br>'+esc(p.rationale)+reqHtml(p));
+          L.circleMarker([lat,lon], { radius:6, color:'#fff', weight:2, fillColor:'#7c3aed', fillOpacity:0.95 }).addTo(map);
         }
         bounds.push([lat,lon]);
       }

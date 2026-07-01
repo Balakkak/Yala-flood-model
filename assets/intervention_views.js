@@ -88,8 +88,9 @@ window.IVViews = (function () {
         '<div class="d">ป้องกัน ~' + lv.protected + ' หลัง · ~' + (lv.cost_thb / 1e6).toFixed(0) + ' ล้าน฿' +
         (lv.length_m ? ' · ยาว ~' + (lv.length_m / 1000).toFixed(1) + ' กม.' : '') +
         (lv.needs_pump ? ' · ต้องมีประตูระบาย/สูบ' : '') +
-        '<br><span style="color:#047857;">วางริมตลิ่งฝั่งเมือง · เลี่ยงรอยอาคาร (ทับ ' + (lv.bld_under_wall || 0) + ' หลัง)' +
-        (lv.road_under_wall ? ' · ข้ามถนน ' + lv.road_under_wall + ' จุด' : '') + '</span>' +
+        '<br><span style="color:#047857;">วางริมตลิ่งฝั่งเมือง · เลี่ยงรอยอาคาร (ทับ ' + (lv.bld_under_wall || 0) + ' หลัง)</span>' +
+        (lv.gates != null ? '<br><span style="color:#6d28d9;"><i class="ti ti-door"></i> ต้องมีประตูระบาย/สูบ ' + lv.gates + ' จุด (ตัดถนน)</span>' : '') +
+        (lv.newly_flooded != null ? '<br><span style="color:#b45309;"><i class="ti ti-scale"></i> No-Adverse-Impact: อาคารกระทบเพิ่ม ' + lv.newly_flooded + ' — ต้องยืนยัน HEC-RAS 2D</span>' : '') +
         '</div></div>';
       var cb = el.querySelector("input");
       cb.addEventListener("change", function () {

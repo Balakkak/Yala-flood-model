@@ -386,21 +386,26 @@ def riverbank_levee():
     arrival2 = priority_flood(elev2, channel)
     flooded2 = inStudy & np.isfinite(arrival2) & (arrival2 <= DESIGN_S)
     before = int(bld[flooded0].sum()); after = int(bld[flooded2].sum())     # ทั้งเมือง (แนวกั้นแม่น้ำคุ้มทั้งเมือง)
+    # No-Adverse-Impact: อาคารที่ "แห้ง→ท่วม" หลังสร้าง (โมเดล connectivity มักได้ 0 — ต้อง HEC-RAS 2D ยืนยันจริง)
+    newly_flooded = int(bld[flooded2 & ~flooded0].sum())
     length_m = len(perim) * 30
     needs_pump = True   # ริมแม่น้ำ: ต้องมีประตูระบาย/สถานีสูบที่จุดท่อระบายออกแม่น้ำ
     cost = length_m * LEVEE_RATE + (PUMP_COST if needs_pump else 0)
     bld_under_wall = int(sum(bld[i] for i in perim))            # ตั้งใจให้ ~0 (หลบอาคารแล้ว)
     road_under_wall = int(sum(1 for i in perim if road_cell[i]))
+    # จุดที่แนวกำแพงตัดถนน = ตำแหน่งบังคับต้องมี "ประตูระบาย (flap gate) + สถานีสูบ" (interior drainage)
+    gate_cells = [int(i) for i in perim if road_cell[i]]
     wall_h = [max(0.0, (DESIGN_S + FREEBOARD) - ground[i]) for i in perim]
     wall_h_mean = round(float(np.mean(wall_h)), 1) if wall_h else 0.0
     wall_h_max = round(float(max(wall_h)), 1) if wall_h else 0.0
     return {"rank": 1, "label": "แนวคันกั้นริมแม่น้ำปัตตานี (ฝั่งเมือง)",
             "before": before, "after": after, "protected": max(0, before - after),
+            "newly_flooded": newly_flooded,
             "line": [[round(p[0], 6), round(p[1], 6)] for p in river_line],
             "length_m": length_m, "needs_pump": needs_pump, "cost": cost,
             "bld_under_wall": bld_under_wall, "road_under_wall": road_under_wall,
             "wall_h_mean": wall_h_mean, "wall_h_max": wall_h_max,
-            "wall_cells": [int(i) for i in perim]}
+            "gate_cells": gate_cells, "wall_cells": [int(i) for i in perim]}
 
 riverbank = riverbank_levee()
 levees = [riverbank] if riverbank["wall_cells"] else []
@@ -412,6 +417,37 @@ print(f"riverbank levee: wall {len(riverbank['wall_cells'])} cells (~{round(rive
 levee_wall = set()
 for lv in levees:
     levee_wall.update(lv["wall_cells"])
+
+# ---------- 6c) จุดประตูระบาย/สถานีสูบ = ตำแหน่งที่กำแพงตัดถนน (องค์ประกอบบังคับ: interior drainage) ----------
+# คันกั้นตัดทางระบายโน้มถ่วง → ทุกจุดที่แนวตัดถนน/ท่อ ต้องมี flap gate + สูบ (เว้นระยะ ~250 ม.)
+floodgates = []
+if riverbank.get("gate_cells"):
+    gpts = [{"lon": lonOf(i % NC), "lat": latOf(i // NC)} for i in riverbank["gate_cells"]]
+    floodgates = dedupe_spatial(gpts, minm=250)
+print(f"floodgate/pump points (คันกั้นตัดถนน): {len(floodgates)}")
+
+# ---------- checklist หลักการออกแบบ + กฎหมาย (จากมาตรฐานจริง) ผูกกับแต่ละโครงสร้าง ----------
+DESIGN_REQ = {
+    "levee": {"std": "USACE ULDC / EM 1110-2-2300", "items": [
+        "ผนังกันซึม (cutoff wall) + วิเคราะห์ under-seepage ใต้ฐาน",
+        "ต่อปลายแนวเข้าที่สูง กันน้ำอ้อม (flanking)",
+        "freeboard เผื่อคลื่น + การทรุดตัว + แผ่นดินไหว",
+        "ประตูระบาย/flap gate + สถานีสูบทุกจุดที่ตัดถนน/ท่อ",
+        "no-rise/EIA: พิสูจน์ไม่ยกระดับน้ำฝั่งตรงข้าม/ท้ายน้ำ (HEC-RAS 2D)"]},
+    "retention": {"std": "แก้มลิงพระราชดำริ / MN-GA Stormwater", "items": [
+        "ประตูระบายจับจังหวะ: เปิดเมื่อแม่น้ำต่ำ · ปิดกันไหลย้อนเมื่อสูง",
+        "อัตราระบายออก ≤ ความจุลำน้ำปลายทาง + ทางน้ำล้นฉุกเฉิน",
+        "เจาะสำรวจดิน: ระดับน้ำใต้ดิน/ชั้นซึม/ปูกันซึม",
+        "ปริมาตรตาม return period (ต้อง EPA SWMM)"]},
+    "bottleneck": {"std": "FHWA HEC-22 / HEC-24", "items": [
+        "flap gate ปากระบายกันน้ำแม่น้ำไหลย้อน",
+        "ปั๊มสำรอง (redundancy) + ไฟสำรอง + ตู้คุมยกพ้นน้ำท่วม",
+        "บ่อพักกันปั๊มตัด-ต่อถี่ · ผนังลาด ≥45°"]},
+    "floodgate": {"std": "USACE / แก้มลิง", "items": [
+        "flap gate กันน้ำแม่น้ำย้อนเข้าเมืองเมื่อระดับสูง",
+        "สถานีสูบระบายน้ำในเมืองออกเมื่อประตูปิด",
+        "ไฟสำรอง (generator) + ตู้ควบคุมยกสูงพ้นน้ำ"]},
+}
 
 # ---------- 7) แก้มลิง/บ่อหน่วงน้ำ ที่จุด flow-accumulation สูงสุด (เลือกบน "ที่ว่าง") ----------
 pond_thr = np.percentile(flowAcc[inStudy], 99)
@@ -491,6 +527,7 @@ for i, b in enumerate(bottlenecks, 1):
         "geometry": {"type": "Point", "coordinates": [round(b["lon"], 6), round(b["lat"], 6)]},
         "properties": {"kind": "bottleneck", "rank": i, "drain_cm": b["drain_cm"], "cost_thb": DRAIN_COST,
                        "on_road": b.get("on_road", False), "relocated": b.get("relocated", False),
+                       "design_req": DESIGN_REQ["bottleneck"]["items"], "std": DESIGN_REQ["bottleneck"]["std"],
                        "label": f"คอขวดระบายน้ำ {i}",
                        "rationale": f"น้ำไหลมารวมสูง แต่ความจุระบายเพียง {b['drain_cm']} ซม. → ควรเพิ่มท่อ/สูบ · {site}"}})
 for i, p in enumerate(ponds, 1):
@@ -507,6 +544,7 @@ for i, p in enumerate(ponds, 1):
                        "buildings_on_site": p["bld_on_site"], "road_on_site": p["road_on_site"],
                        # ศูนย์กลางเซลล์ว่างจริง (30 ม.) → 3D วาดบ่อเป็นรูปจริง ไม่ใช่วงกลมทับอาคาร
                        "cells": [[round(lonOf(idx % NC), 6), round(latOf(idx // NC), 6)] for idx in p["free_idx"]],
+                       "design_req": DESIGN_REQ["retention"]["items"], "std": DESIGN_REQ["retention"]["std"],
                        "label": f"แก้มลิง/บ่อหน่วงน้ำ {i}",
                        "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม. · {feas}"}})
 for lv in levees:
@@ -518,10 +556,20 @@ for lv in levees:
                            "length_m": lv["length_m"], "bld_under_wall": lv["bld_under_wall"],
                            "road_under_wall": lv["road_under_wall"],
                            "wall_h_mean": lv["wall_h_mean"], "wall_h_max": lv["wall_h_max"],
+                           "newly_flooded": lv["newly_flooded"], "gates": len(floodgates),
+                           "design_req": DESIGN_REQ["levee"]["items"], "std": DESIGN_REQ["levee"]["std"],
                            "label": lv["label"],
                            "rationale": f"กำแพงริมตลิ่งฝั่งเมือง ~{round(lv['length_m']/1000,1)} กม. · สูงเฉลี่ย ~{lv['wall_h_mean']} ม. (สูงสุด ~{lv['wall_h_max']}) → ป้องกัน ~{lv['protected']} หลัง (จากท่วม {lv['before']})"
-                                        + (f" · เลี่ยงอาคารแล้ว (ทับ {lv['bld_under_wall']} หลัง) ข้ามถนน {lv['road_under_wall']} จุด" )
-                                        + " · ต้องมีประตูระบาย/สูบที่ปากท่อ · แนวคัดกรอง ต้องจัดแนวจริงด้วย LiDAR+HEC-RAS"}})
+                                        + (f" · เลี่ยงอาคารแล้ว (ทับ {lv['bld_under_wall']} หลัง) · ต้องมีประตูระบาย/สูบ {len(floodgates)} จุดที่ตัดถนน")
+                                        + f" · No-Adverse-Impact: อาคารกระทบเพิ่ม {lv['newly_flooded']} (ต้องยืนยัน HEC-RAS 2D)"}})
+# จุดประตูระบาย/สถานีสูบ ตามแนวคันกั้น
+for i, gp in enumerate(floodgates, 1):
+    feats.append({"type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [round(gp["lon"], 6), round(gp["lat"], 6)]},
+        "properties": {"kind": "floodgate", "rank": i,
+                       "design_req": DESIGN_REQ["floodgate"]["items"], "std": DESIGN_REQ["floodgate"]["std"],
+                       "label": f"ประตูระบาย/สถานีสูบ {i}",
+                       "rationale": "จุดที่คันกั้นตัดถนน/ทางระบาย → ต้องมีประตูกันน้ำย้อน (flap gate) + สถานีสูบระบายน้ำในเมืองออก"}})
 
 fc = {"type": "FeatureCollection", "name": "intervention_candidates",
       "_meta": {"design_stage_m": DESIGN_S, "method": "Priority-Flood screening on FABDEM 30m",
@@ -562,6 +610,7 @@ sim = {
             "needs_pump": lv["needs_pump"], "cost_thb": lv["cost"],
             "bld_under_wall": lv["bld_under_wall"], "road_under_wall": lv["road_under_wall"],
             "wall_h_mean": lv["wall_h_mean"], "wall_h_max": lv["wall_h_max"],
+            "newly_flooded": lv["newly_flooded"], "gates": len(floodgates),
         }
         for lv in levees
     ],
@@ -579,7 +628,9 @@ for lv in levees:
                            + (" + ประตูระบาย/สถานีสูบ" if lv["needs_pump"] else ""),
                  "protects_buildings": lv["protected"], "cost_thb": lv["cost"],
                  "benefit_per_million": per_million(lv["protected"], lv["cost"]),
-                 "expected": f"ป้องกันอาคารได้ ~{lv['protected']} หลัง (จากที่ท่วม {lv['before']}) · เลี่ยงรอยอาคาร (ทับ {lv['bld_under_wall']} หลัง)"})
+                 "newly_flooded": lv["newly_flooded"], "gates": len(floodgates),
+                 "design_req": DESIGN_REQ["levee"]["items"], "std": DESIGN_REQ["levee"]["std"],
+                 "expected": f"ป้องกันอาคารได้ ~{lv['protected']} หลัง (จากที่ท่วม {lv['before']}) · เลี่ยงรอยอาคาร (ทับ {lv['bld_under_wall']} หลัง) · ประตู/สูบ {len(floodgates)} จุด · กระทบเพิ่ม {lv['newly_flooded']}"})
 for rank, z in enumerate(zones, 1):
     recs.append({"type": "พื้นที่เสี่ยง (hotspot)", "kind": "hotspot",
                  "where": f"{z['lat']:.3f}, {z['lon']:.3f}",
@@ -630,6 +681,10 @@ summary = {"design_stage_m": DESIGN_S,
            "recommendations": recs,
            "method_note": "ระดับ screening บน Priority-Flood (DEM FABDEM 30 ม., ±5 ม.) — ใช้เลือกจุด/เทียบมาตรการ "
                           "ไม่ใช่ออกแบบขนาดจริง (ต้อง HEC-RAS 2D + SWMM + LiDAR)",
+           "legal_note": "หลัก No-Adverse-Impact (ASFPM) / no-rise (FEMA floodway) / EIA: โครงสร้างต้องไม่ยกระดับน้ำ "
+                         "หรือผลักน้ำท่วมไปฝั่งตรงข้าม/ท้ายน้ำ/บ้านข้างเคียง · โมเดล connectivity นี้ประเมินผลกระทบท้ายน้ำ "
+                         "ไม่ได้ (ไม่อนุรักษ์ปริมาตร) — 'อาคารกระทบเพิ่ม' ที่แสดงเป็นค่าต่ำสุด ต้องยืนยันด้วย HEC-RAS 2D",
+           "design_requirements": DESIGN_REQ,
            "generated": __import__("datetime").date.today().isoformat()}
 json.dump(summary, open(os.path.join(D, "intervention_summary.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 print(f"\n✅ wrote intervention_candidates.geojson ({len(feats)} feats) + intervention_summary.json + buildings_grid.json")
