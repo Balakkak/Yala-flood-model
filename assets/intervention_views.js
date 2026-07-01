@@ -260,11 +260,11 @@ window.IVViews = (function () {
     else { $("vw2d").classList.add("active"); syncNav("2d"); }
   }
 
-  // ซิงก์ปุ่ม 2D/3D ของกลุ่ม "แก้โครงสร้าง" บนแถบนำทางกับมุมมองปัจจุบัน
+  // มุมมอง 2D/3D เลือกบนแผนที่ → จำไว้ใน yalaView + อัปเดตลิงก์หน้าต่างให้เปิดมุมมองเดิม
   function syncNav(v) {
-    var a2 = document.getElementById("navIv2d"), a3 = document.getElementById("navIv3d");
-    if (a2) a2.classList.toggle("active", v === "2d");
-    if (a3) a3.classList.toggle("active", v === "3d");
+    try { localStorage.setItem("yalaView", v); } catch (e) {}
+    var nf = document.getElementById("navFlood"); if (nf) nf.href = (v === "2d" ? "dashboard.html" : "index.html");
+    var ni = document.getElementById("navIv"); if (ni) ni.href = "interventions.html?v=" + v;
   }
 
   // ================= สลับมุมมอง 2D/3D =================

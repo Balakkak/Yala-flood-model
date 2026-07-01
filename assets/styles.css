@@ -650,26 +650,32 @@ path.river-flow-anim {
 }
 .view-toggle a:not(.active):hover { background: rgba(148, 197, 240, .16); color: #eaf5ff; }
 
-/* Nav 2 หน้าต่างหลัก (จำลองน้ำท่วม / แก้โครงสร้าง) แต่ละกลุ่มเลือก 2D/3D ได้ */
-.nav-windows { display: inline-flex; gap: 8px; align-items: center; }
-.nav-group {
-  display: inline-flex; align-items: center; gap: 2px;
-  border: 1px solid rgba(148, 197, 240, .28); border-radius: 10px; padding: 2px 3px 2px 9px;
+/* Nav 2 หน้าต่างหลัก (จำลองน้ำท่วม / แก้โครงสร้าง) — 2D/3D เลือกบนแผนที่ */
+.nav-windows {
+  display: inline-flex; gap: 4px; align-items: center; padding: 2px;
+  border: 1px solid rgba(148, 197, 240, .28); border-radius: 10px;
   background: rgba(148, 197, 240, .1); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
 }
-.nav-group .nav-label {
-  font-size: 11px; font-weight: 700; color: #cfe6fb; display: flex; align-items: center; gap: 4px;
-  margin-right: 5px; white-space: nowrap;
+.nav-win {
+  padding: 5px 14px; font-size: 12px; font-weight: 700; color: #bcd9f3; border-radius: 7px;
+  text-decoration: none; display: flex; align-items: center; gap: 5px; transition: all .15s; white-space: nowrap;
 }
-.nav-group a {
-  padding: 4px 10px; font-size: 11.5px; font-weight: 700; color: #bcd9f3; border-radius: 7px;
-  text-decoration: none; transition: all .15s;
-}
-.nav-group a.active {
+.nav-win.active {
   background: linear-gradient(135deg, #38bdf8, #0284c7); color: #fff; box-shadow: 0 2px 6px rgba(2, 132, 199, .45);
 }
-.nav-group a:not(.active):hover { background: rgba(148, 197, 240, .16); color: #eaf5ff; }
-@media (max-width: 900px) { .nav-group .nav-label { display: none; } }
+.nav-win:not(.active):hover { background: rgba(148, 197, 240, .16); color: #eaf5ff; }
+
+/* ปุ่มสลับ 2D/3D บนแผนที่ (หน้าจำลองน้ำท่วม) */
+.map-view-toggle {
+  position: absolute; top: 14px; right: 14px; z-index: 620; display: inline-flex;
+  background: #fff; border: 1px solid rgba(0, 0, 0, .1); border-radius: 9px; overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+}
+.map-view-toggle a {
+  padding: 6px 15px; font-size: 12px; font-weight: 700; color: #475569; text-decoration: none;
+}
+.map-view-toggle a.active { background: #0c3b6e; color: #fff; }
+.map-view-toggle a:not(.active):hover { background: #f1f5f9; }
 
 /* สถานีสูบน้ำ (marker บนแผนที่ 2D) */
 .pump-icon { background: none; border: none; }

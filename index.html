@@ -113,16 +113,8 @@
     <div class="header-spacer"></div>
     <div class="header-meta">
       <div class="nav-windows">
-        <div class="nav-group">
-          <span class="nav-label">🌊 จำลองน้ำท่วม</span>
-          <a href="dashboard.html">2D</a>
-          <a href="index.html" class="active">3D</a>
-        </div>
-        <div class="nav-group">
-          <span class="nav-label">🛠️ แก้โครงสร้าง</span>
-          <a href="interventions.html?v=2d">2D</a>
-          <a href="interventions.html?v=3d">3D</a>
-        </div>
+        <a id="navFlood" class="nav-win" href="index.html">🌊 จำลองน้ำท่วม</a>
+        <a id="navIv" class="nav-win" href="interventions.html">🛠️ แก้โครงสร้าง</a>
       </div>
       <span class="chip">EPSG:32647 &middot; UTM 47N</span>
       <span class="status-pill is-connecting"><span class="status-dot"></span> <span id="statusText">กำลังเชื่อมต่อ…</span></span>
@@ -133,6 +125,10 @@
 
   <div class="map3d-wrap">
     <div id="map"></div>
+    <div class="map-view-toggle">
+      <a data-v="2d" href="dashboard.html">2D</a>
+      <a data-v="3d" href="index.html" class="active">3D</a>
+    </div>
     <div id="err3d" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:14px 18px;border-radius:12px;font-size:13px;max-width:340px;text-align:center;box-shadow:0 8px 24px rgba(15,38,73,.18);line-height:1.5;">
       <b>โหลดโมเดล 3D ไม่สำเร็จ</b><br>ต้องเปิดผ่าน dev server (เช่น <code>npm run dev</code>) และต้องโหลดไฟล์ DEM/อาคารได้ — ดูรายละเอียดใน console
     </div>
@@ -256,6 +252,7 @@
   </div>
 </div><!-- /.app -->
 
+<script src="assets/nav.js"></script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
 <script src="assets/live_status.js"></script>
 <script>
@@ -306,7 +303,7 @@ const map = new maplibregl.Map({
   },
   center: [101.2845, 6.547], zoom: 14.2, pitch: 58, bearing: -22, maxZoom: 19
 });
-map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'top-right');
+map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'bottom-right');  // เลี่ยงชนปุ่ม 2D/3D บนแผนที่
 map.addControl(new maplibregl.AttributionControl({ compact:true }), 'bottom-left');
 
 // เมื่อฝังใน iframe/modal: container อาจเริ่มที่ขนาด 0 แล้วค่อยได้ขนาดจริง
