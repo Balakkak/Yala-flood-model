@@ -650,6 +650,27 @@ path.river-flow-anim {
 }
 .view-toggle a:not(.active):hover { background: rgba(148, 197, 240, .16); color: #eaf5ff; }
 
+/* Nav 2 หน้าต่างหลัก (จำลองน้ำท่วม / แก้โครงสร้าง) แต่ละกลุ่มเลือก 2D/3D ได้ */
+.nav-windows { display: inline-flex; gap: 8px; align-items: center; }
+.nav-group {
+  display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid rgba(148, 197, 240, .28); border-radius: 10px; padding: 2px 3px 2px 9px;
+  background: rgba(148, 197, 240, .1); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.nav-group .nav-label {
+  font-size: 11px; font-weight: 700; color: #cfe6fb; display: flex; align-items: center; gap: 4px;
+  margin-right: 5px; white-space: nowrap;
+}
+.nav-group a {
+  padding: 4px 10px; font-size: 11.5px; font-weight: 700; color: #bcd9f3; border-radius: 7px;
+  text-decoration: none; transition: all .15s;
+}
+.nav-group a.active {
+  background: linear-gradient(135deg, #38bdf8, #0284c7); color: #fff; box-shadow: 0 2px 6px rgba(2, 132, 199, .45);
+}
+.nav-group a:not(.active):hover { background: rgba(148, 197, 240, .16); color: #eaf5ff; }
+@media (max-width: 900px) { .nav-group .nav-label { display: none; } }
+
 /* สถานีสูบน้ำ (marker บนแผนที่ 2D) */
 .pump-icon { background: none; border: none; }
 .pump-dot {
