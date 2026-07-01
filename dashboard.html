@@ -30,10 +30,17 @@
     </div>
     <div class="header-spacer"></div>
     <div class="header-meta">
-      <div class="view-toggle">
-        <a href="dashboard.html" class="active">🗺️ 2D</a>
-        <a href="index.html">🏙️ 3D</a>
-        <a href="interventions.html">🛠️ โครงสร้าง</a>
+      <div class="nav-windows">
+        <div class="nav-group">
+          <span class="nav-label">🌊 จำลองน้ำท่วม</span>
+          <a href="dashboard.html" class="active">2D</a>
+          <a href="index.html">3D</a>
+        </div>
+        <div class="nav-group">
+          <span class="nav-label">🛠️ แก้โครงสร้าง</span>
+          <a href="interventions.html?v=2d">2D</a>
+          <a href="interventions.html?v=3d">3D</a>
+        </div>
       </div>
       <span class="chip">EPSG:32647 &middot; UTM 47N</span>
       <span class="status-pill is-connecting"><span class="status-dot"></span> <span id="statusText">กำลังเชื่อมต่อ…</span></span>

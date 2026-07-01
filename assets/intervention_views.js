@@ -183,6 +183,7 @@ window.IVViews = (function () {
       var rain = +$("sRain").value, river = +$("sRiver").value, dam = +$("sDam").value;
       $("vRain").textContent = rain; $("vRiver").textContent = river; $("vDam").textContent = dam;
       IVCompare.setStage(IVCompare.stageFromInputs(rain, river, dam));
+      try { localStorage.setItem("yalaSim", JSON.stringify({ rain: rain, river: river, dam: dam })); } catch (e) {}   // แชร์ระดับน้ำกับหน้าจำลอง
     }
     function updateLevelReadout() {
       var s = IVCompare.getStage(), rg = IVCompare.stageRange(), tag = $("lvlTag");
@@ -242,8 +243,28 @@ window.IVViews = (function () {
         .then(function () { bLive.disabled = false; bLive.innerHTML = '<i class="ti ti-rss"></i> ดึงค่าปัจจุบันจริง'; });
     });
 
-    applyLevel();                      // ตั้งระดับน้ำเริ่มต้นจากสไลเดอร์
-    switchView("3d");                  // มุมมองหลัก = 3D
+    // ดึงระดับน้ำที่ "จำลองไว้ในหน้าจำลองน้ำท่วม" (yalaSim) มาตั้งเป็นค่าเริ่มต้น
+    (function restoreFromSim() {
+      var s = null; try { s = JSON.parse(localStorage.getItem("yalaSim") || "null"); } catch (e) {}
+      if (!s) return;
+      if (s.rain != null) $("sRain").value = s.rain;
+      if (s.river != null) $("sRiver").value = s.river;
+      if (s.dam != null) $("sDam").value = s.dam;
+      var note = $("simNote"); if (note) note.style.display = "flex";
+    })();
+    applyLevel();                      // ตั้งระดับน้ำเริ่มต้น (จากระดับที่จำลองไว้ ถ้ามี)
+    updateLevelReadout();
+    // มุมมองเริ่มต้นตาม ?v= (มาจากปุ่มหน้าต่างบนแถบนำทาง) — ค่าเริ่มต้น 3D
+    var v0 = (new URLSearchParams(location.search).get("v") === "2d") ? "2d" : "3d";
+    if (v0 === "3d") switchView("3d");
+    else { $("vw2d").classList.add("active"); syncNav("2d"); }
+  }
+
+  // ซิงก์ปุ่ม 2D/3D ของกลุ่ม "แก้โครงสร้าง" บนแถบนำทางกับมุมมองปัจจุบัน
+  function syncNav(v) {
+    var a2 = document.getElementById("navIv2d"), a3 = document.getElementById("navIv3d");
+    if (a2) a2.classList.toggle("active", v === "2d");
+    if (a3) a3.classList.toggle("active", v === "3d");
   }
 
   // ================= สลับมุมมอง 2D/3D =================
@@ -252,6 +273,7 @@ window.IVViews = (function () {
     if (v === view) return; view = v;
     $("vw2d").classList.toggle("active", v === "2d");
     $("vw3d").classList.toggle("active", v === "3d");
+    syncNav(v);
     var d3 = $("map3d"), m2 = $("map");
     if (v === "3d") {
       d3.style.display = "block";
