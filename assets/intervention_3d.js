@@ -154,7 +154,7 @@ window.IV3D = (function () {
             geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, 16, 8)] } });           // ฐานป้อมสูบ (เล็กลง ~1 เซลล์)
           bott.features.push({ type: "Feature", properties: { h: 30, base: 0, color: "#ea580c" },
             geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, 7, 4)] } });            // เสา/อาคารสูบ
-          addHtmlMarker(lng, lat, "bottleneck", "ti-windmill", "สูบ/ท่อ", p.label, p.rationale);
+          addHtmlMarker(lng, lat, "bottleneck", "ti-windmill", "สูบ/ท่อ", p.label, p.rationale, p.design_req, p.std);
         } else if (p.kind === "retention") {
           // วาดบ่อจากเซลล์ว่างจริง (สี่เหลี่ยม 30 ม. ต่อเซลล์) → ไม่มีทางทับอาคาร; ถ้าไม่มีข้อมูลค่อย fallback วงกลม
           if (p.cells && p.cells.length) {
@@ -165,7 +165,9 @@ window.IV3D = (function () {
             var rM = Math.sqrt((p.area_rai || 2) * 1600 / Math.PI);
             pond.features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [makeRing(lng, lat, rM, 24)] } });
           }
-          addHtmlMarker(lng, lat, "retention", "ti-droplet", "แก้มลิง", p.label, p.rationale);
+          addHtmlMarker(lng, lat, "retention", "ti-droplet", "แก้มลิง", p.label, p.rationale, p.design_req, p.std);
+        } else if (p.kind === "floodgate") {
+          addHtmlMarker(lng, lat, "floodgate", "ti-door", "ประตู/สูบ", p.label, p.rationale, p.design_req, p.std);
         }
       });
       // ---- คอขวด: ป้อมสูบ extrusion สีส้ม ----
@@ -186,13 +188,20 @@ window.IV3D = (function () {
     }).catch(function (e) { console.warn("3D candidates โหลดไม่ได้", e); });
   }
 
-  // หมุด HTML (รองรับไทยเต็ม ไม่พึ่ง glyph) + popup อธิบายเหตุผล
-  function addHtmlMarker(lng, lat, kind, icon, short, label, rationale) {
+  // หมุด HTML (รองรับไทยเต็ม ไม่พึ่ง glyph) + popup อธิบายเหตุผล + checklist องค์ประกอบที่ต้องมี
+  function reqHtml(req, std) {
+    if (!req || !req.length) return "";
+    var items = req.map(function (x) { return "<li>" + x + "</li>"; }).join("");
+    return '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #e5e7eb;">'
+      + '<div style="font-size:10.5px;font-weight:700;color:#7c3aed;">องค์ประกอบที่ต้องมี (' + (std || "") + ')</div>'
+      + '<ul style="margin:3px 0 0;padding-left:16px;font-size:10.5px;color:#475569;line-height:1.5;">' + items + '</ul></div>';
+  }
+  function addHtmlMarker(lng, lat, kind, icon, short, label, rationale, req, std) {
     var el = document.createElement("span");
     el.className = "iv3d-marker " + kind;
     el.innerHTML = '<i class="ti ' + icon + '"></i> ' + short;
     var pop = new maplibregl.Popup({ offset: 22, closeButton: false })
-      .setHTML('<b>' + (label || short) + '</b><br>' + (rationale || ""));
+      .setHTML('<b>' + (label || short) + '</b><br>' + (rationale || "") + reqHtml(req, std));
     new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([lng, lat]).setPopup(pop).addTo(map);
   }
 
