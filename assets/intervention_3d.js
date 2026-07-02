@@ -259,11 +259,27 @@ window.IV3D = (function () {
                "fill-extrusion-height": ["case", ["==", ["get", "on"], 1], 4.8, 1.7],
                "fill-extrusion-base": ["case", ["==", ["get", "on"], 1], 4.5, 1.5],
                "fill-extrusion-vertical-gradient": false } });
+    buildCanals3D();
     buildCandidateMarkers();
     buildArrays();
     updateSplit();
     stageCur = stageTarget = IVCompare.getStage();
     map.addLayer(waterLayer);
+  }
+
+  // คลองระบายน้ำเส้นใหม่ 3D — เส้นสีฟ้าเข้ม (ซ่อนไว้ก่อน · toggleCanal เปิด/ปิด)
+  function buildCanals3D() {
+    var routes = IVCompare.canals ? IVCompare.canals() : [];
+    if (!routes.length || map.getSource("iv-canal")) return;
+    var fc = { type: "FeatureCollection", features: routes.map(function (rt, i) {
+      return { type: "Feature", properties: { n: i + 1, len: rt.length_m },
+        geometry: { type: "LineString", coordinates: rt.line.map(function (p) { return [p[0], p[1]]; }) } };
+    }) };
+    map.addSource("iv-canal", { type: "geojson", data: fc });
+    map.addLayer({ id: "iv-canal-case", type: "line", source: "iv-canal", layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#ffffff", "line-width": 7, "line-opacity": 0.85 } });
+    map.addLayer({ id: "iv-canal-line", type: "line", source: "iv-canal", layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#0891b2", "line-width": 4 } });
   }
 
   function updateAfterBuffer() {
@@ -281,7 +297,7 @@ window.IV3D = (function () {
   function updateSplit() { uSplitX = mercXOf(IVCompare.splitLon()); if (map) map.triggerRepaint(); }
 
   return {
-    mount: function (el, _meta, onFail) {
+    mount: function (el, _meta, onFail, onReady) {
       var loaded = false;
       try {
         map = new maplibregl.Map({
@@ -295,7 +311,7 @@ window.IV3D = (function () {
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
       try { new ResizeObserver(function () { map.resize(); }).observe(el); } catch (e) {}
       map.on("error", function (e) { console.warn("IV3D map:", e && e.error && e.error.message); });
-      map.on("load", function () { loaded = true; try { buildScene(); } catch (err) { console.warn("IV3D buildScene:", err && err.message); } });
+      map.on("load", function () { loaded = true; try { buildScene(); if (onReady) onReady(); } catch (err) { console.warn("IV3D buildScene:", err && err.message); } });
       setTimeout(function () { if (!loaded && onFail) onFail(); }, 7000);    // ไม่มี WebGL2 → กลับมา 2D
     },
     onUpdate: function (kind) {
@@ -307,6 +323,12 @@ window.IV3D = (function () {
     flyTo: function (lng, lat) { if (map) map.flyTo({ center: [lng, lat], zoom: 15.4, pitch: 56, essential: true }); },
     show: function () { if (map) setTimeout(function () { try { map.resize(); } catch (e) {} }, 60); },
     hide: function () {},
+    toggleCanal: function (visible) {
+      if (!map) return;
+      ["iv-canal-case", "iv-canal-line"].forEach(function (id) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+      });
+    },
     toggleKind: function (kind, visible) {
       if (!map) return;
       if (htmlMarkers[kind]) {

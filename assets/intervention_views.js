@@ -10,7 +10,7 @@
 window.IVViews = (function () {
   "use strict";
   var L, lmap, meta, NC, NR;
-  var canvas, ctx, floodOverlay, leveeLayers = {};
+  var canvas, ctx, floodOverlay, leveeLayers = {}, canalLayer = null, canalOn = false;
   var mount3dFn = null, view = "2d";
 
   var $ = function (id) { return document.getElementById(id); };
@@ -31,17 +31,19 @@ window.IVViews = (function () {
     var A = IVCompare.arrivals(), base = A.base, after = A.after;
     var ar = IVCompare.arrays(), inStudy = ar.inStudy, chan = ar.chanMask;
     var st = IVCompare.getStage(), split = IVCompare.getSplit(), splitCol = split * NC;
+    var drain = IVCompare.getDrain();     // ความจุระบายจากมาตรการที่เปิด (แก้มลิง/คอขวด) → ฝั่ง "หลัง"
     var img = ctx.createImageData(NC, NR), d = img.data;
     for (var r = 0; r < NR; r++) for (var c = 0; c < NC; c++) {
       var i = r * NC + c, o = i * 4;
       if (!inStudy[i] || chan[i]) { d[o + 3] = 0; continue; }
       var useBefore = c < splitCol;
       var arr = useBefore ? base[i] : after[i];
-      if (arr <= st) {
-        var col = depthColor(st - arr);
+      var dep = st - arr - (useBefore ? 0 : drain[i]);   // ฝั่งหลังหักความจุระบายของมาตรการที่เปิด
+      if (dep > 0.03) {
+        var col = depthColor(dep);
         d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 205;
       } else if (!useBefore && base[i] <= st) {
-        d[o] = 52; d[o + 1] = 211; d[o + 2] = 153; d[o + 3] = 150;   // dried = เขียว
+        d[o] = 52; d[o + 1] = 211; d[o + 2] = 153; d[o + 3] = 150;   // แห้งลงหลังมีมาตรการ = เขียว
       } else { d[o + 3] = 0; }
     }
     ctx.putImageData(img, 0, 0);
@@ -63,16 +65,49 @@ window.IVViews = (function () {
   // ================= ผลของมาตรการ (ป้องกันได้เท่าไร เมื่อเทียบกับไม่มีโครงสร้าง) =================
   function updateStats() {
     var s = IVCompare.stats(); if (!s) return;
-    var n = IVCompare.enabledCount(), res = $("protResult");
+    var nLevee = IVCompare.enabledCount();
+    var nInfo = IVCompare.infoEnabledCount ? IVCompare.infoEnabledCount() : 0;
+    var canals = (canalOn && IVCompare.canals) ? IVCompare.canals() : [];
+    var nCanal = canals.length;
+    var res = $("protResult");
     res.style.display = "block";
-    if (n === 0) {
+    if (nLevee + nInfo + nCanal === 0) {
       res.className = "prot-result none";
       res.innerHTML = '<i class="ti ti-info-circle"></i> ยังไม่เปิดมาตรการ — น้ำท่วมเต็มตามระดับที่จำลอง';
-    } else {
-      res.className = "prot-result";
-      res.innerHTML = '<i class="ti ti-shield-check"></i> เปิด ' + n + ' มาตรการ · ป้องกันอาคาร <b>~' +
-        fmt(s.reduced.buildings) + ' หลัง</b> · ลดปริมาตรน้ำ <b>~' + s.reduced.volume_pct + '%</b> (ที่ระดับน้ำปัจจุบัน)';
+      var pe0 = $("cmpPump"); if (pe0) pe0.style.display = "none";
+      return;
     }
+    res.className = "prot-result";
+    var total = nLevee + nInfo + nCanal;
+    var html;
+    if (nLevee > 0) {
+      // คันกั้นกั้นแม่น้ำ → โมเดล connectivity วัดผลได้จริง
+      html = '<i class="ti ti-shield-check"></i> เปิด ' + total + ' มาตรการ · ป้องกันอาคาร <b>~' +
+        fmt(s.reduced.buildings) + ' หลัง</b> · ลดปริมาตรน้ำท่วมจากแม่น้ำ <b>~' + s.reduced.volume_pct + '%</b> (แบบจำลอง connectivity)';
+    } else if (nInfo > 0) {
+      // เปิดเฉพาะมาตรการกายภาพ — ซื่อตรงว่าโมเดลแม่น้ำไม่แสดงผลโดยตรง
+      html = '<i class="ti ti-droplet"></i> เปิด ' + total + ' มาตรการกายภาพ (แก้มลิง/คอขวด/ประตู/คลอง) — จัดการ<b>น้ำฝนสะสม/น้ำท้องถิ่น</b> ซึ่งแบบจำลองน้ำท่วมจากแม่น้ำนี้ไม่แสดงผลโดยตรง';
+    } else {
+      // เปิดเฉพาะคลอง
+      html = '<i class="ti ti-route"></i> เปิดแนว<b>คลองระบายน้ำเส้นใหม่</b> — โครงสร้างระบายน้ำท้องถิ่นออกจากเมือง (ไม่กระทบระดับน้ำจากแม่น้ำในแบบจำลองนี้)';
+    }
+    // Mass-balance ของแก้มลิง (ซื่อตรง): ปริมาตรกักเก็บ เทียบปริมาตรน้ำท่วมที่จำลอง
+    var stor = IVCompare.retentionStorage ? IVCompare.retentionStorage() : 0;
+    if (stor > 0) {
+      var floodVol = s.before.volume_m3;
+      var pctTxt = (floodVol > 0) ? ('≈ <b>' + (Math.round(stor / floodVol * 1000) / 10) + '%</b> ของปริมาตรน้ำท่วมที่จำลอง') : '';
+      html += '<div style="margin-top:7px;padding-top:7px;border-top:1px dashed rgba(0,0,0,.12);font-size:11px;line-height:1.5;color:#334155;">' +
+        '<i class="ti ti-calculator" style="color:#0d9488;"></i> แก้มลิงที่เปิดกักน้ำรวม <b>~' + fmt(stor) + ' ลบ.ม.</b> ' + pctTxt +
+        ' <span style="color:#64748b;">· ประเมินแบบสมดุลปริมาตร (mass-balance) — ปริมาตร/อัตราจริงต้องยืนยันด้วย EPA SWMM</span></div>';
+    }
+    // สรุปคลองระบายน้ำเส้นใหม่ที่เปิด
+    if (nCanal > 0) {
+      var km = canals.reduce(function (a, c) { return a + c.length_m; }, 0) / 1000;
+      html += '<div style="margin-top:6px;font-size:11px;line-height:1.5;color:#334155;">' +
+        '<i class="ti ti-route" style="color:#0891b2;"></i> คลองระบายน้ำเส้นใหม่ <b>' + nCanal + ' เส้น</b> รวม ~' + km.toFixed(1) +
+        ' กม. — ระบายน้ำท้องถิ่นออกสู่แม่น้ำ <span style="color:#64748b;">(ขนาด/ความจุจริงต้อง HEC-RAS/SWMM)</span></div>';
+    }
+    res.innerHTML = html;
     // หมายเหตุสถานีสูบเมื่อเปิดคันกั้นที่ต้องสูบร่วม
     var pumps = IVCompare.levees().filter(function (l) { return IVCompare.isEnabled(l.rank) && l.needs_pump; });
     var pe = $("cmpPump");
@@ -87,7 +122,7 @@ window.IVViews = (function () {
       var el = document.createElement("label");
       el.className = "struct-tog";
       el.innerHTML =
-        '<input type="checkbox" data-rank="' + lv.rank + '">' +
+        '<input type="checkbox" data-rank="' + lv.rank + '" data-kind="levee">' +
         '<div><div class="t"><i class="ti ti-shield-half" style="color:#78716c;"></i> ' + lv.label + '</div>' +
         '<div class="d">ป้องกัน ~' + lv.protected + ' หลัง · ~' + (lv.cost_thb / 1e6).toFixed(0) + ' ล้าน฿' +
         (lv.length_m ? ' · ยาว ~' + (lv.length_m / 1000).toFixed(1) + ' กม.' : '') +
@@ -123,7 +158,7 @@ window.IVViews = (function () {
     else if (lmap) lmap.flyTo([lat, lng], 15, { animate: true });
   }
 
-  // ================= มาตรการเชิงข้อมูล (คอขวด/แก้มลิง) — ยังไม่จำลองผล รอ SWMM =================
+  // ============ มาตรการกายภาพ (แก้มลิง/คอขวด/ประตู) — จำลองผลลดน้ำท่วมรายจุด (screening) ============
   function buildInfoMeasures() {
     var host = $("structToggles");
     fetch("data/intervention_candidates.geojson?t=" + Date.now()).then(function (r) { return r.json(); }).then(function (fc) {
@@ -132,7 +167,7 @@ window.IVViews = (function () {
       });
       if (!pts.length) return;
       var wrap = document.createElement("div");
-      wrap.innerHTML = '<div class="info-divider"><i class="ti ti-flask"></i> มาตรการกายภาพแนะนำ (บ่อหน่วง/ขยายท่อ/ประตูระบาย) — เลือกเพื่อดูตำแหน่งบนแผนที่</div>';
+      wrap.innerHTML = '<div class="info-divider"><i class="ti ti-flask"></i> มาตรการกายภาพแนะนำ (บ่อหน่วง/ขยายท่อ/ประตูระบาย) — ติ๊กเพื่อจำลองผลลดน้ำท่วม (screening · ปริมาตรจริงต้อง SWMM)</div>';
       // แก้มลิงก่อน แล้วคอขวด แล้วประตูระบาย
       pts.sort(function (a, b) {
         var ka = a.properties.kind, kb = b.properties.kind;
@@ -168,20 +203,68 @@ window.IVViews = (function () {
           '<div><div class="t"><i class="ti ' + icon + '" style="color:' + col + ';"></i> ' + p.label + '</div>' +
           '<div class="d">' + esc(detail) + '</div></div>';
         
+        // เซลล์ศูนย์กลางของมาตรการ (คำนวณสูตรเดียวกับ engine → key ตรงกัน)
+        var mc = Math.floor((lng - meta.OLON) / meta.DLON), mr = Math.floor((meta.OLAT - lat) / meta.DLAT);
+        var cell = mr * NC + mc;
         var cb = el.querySelector("input");
+        cb.dataset.kind = kind;
         cb.addEventListener("change", function () {
           el.classList.toggle("on", cb.checked);
-          if (window.toggleLayerVisibility) {
-            window.toggleLayerVisibility(kind, cb.checked);
+          if (IVViews.stopPlay) IVViews.stopPlay();
+          // สั่ง engine จำลองผลของมาตรการนี้จริง (ก่อนหน้านี้ checkbox ไม่เชื่อมกับ engine → บ่อไม่มีผล)
+          if (kind === "retention") IVCompare.toggleRetention(cell, cb.checked);
+          else if (kind === "bottleneck") IVCompare.toggleBottleneck(cell, cb.checked);
+          else if (kind === "floodgate") IVCompare.toggleFloodgate(cell, cb.checked);
+          if (window.toggleLayerVisibility) window.toggleLayerVisibility(kind, cb.checked);
+          // เปิดมาตรการตอนยังแห้งอยู่ → ยกระดับเป็นเหตุการณ์ออกแบบ เพื่อให้เห็นผล "ลดน้ำท่วม"
+          if (cb.checked && applyLevelFn) {
+            var s = IVCompare.getStage(), rg = IVCompare.stageRange();
+            if (s <= rg.min + 0.05) { $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevelFn(); }
           }
-          if (cb.checked) {
-            focusPoint(lng, lat);
-          }
+          if (cb.checked) focusPoint(lng, lat);
         });
         wrap.appendChild(el);
       });
       host.appendChild(wrap);
     }).catch(function (e) { console.warn("info measures โหลดไม่ได้", e); });
+  }
+
+  // ================= คลองระบายน้ำเส้นใหม่ (แนวขุดจากแอ่งแก้มลิง → แม่น้ำ) =================
+  function buildCanals() {
+    var routes = IVCompare.canals ? IVCompare.canals() : [];
+    if (!routes.length) return;
+    canalLayer = L.layerGroup();
+    var totalKm = 0;
+    routes.forEach(function (rt, i) {
+      totalKm += rt.length_m / 1000;
+      var latlng = rt.line.map(function (p) { return [p[1], p[0]]; });
+      var popup = '<b>คลองระบายน้ำเส้นใหม่ ' + (i + 1) + '</b><br>ความยาว ~' + rt.length_m.toLocaleString() +
+        ' ม. · ระบายน้ำจากแอ่งแก้มลิงออกสู่แม่น้ำปัตตานี<br>' +
+        '<span style="color:#b45309;">แนว least-cost (เลี่ยงขึ้นเนิน/อาคาร) — ขนาด/ความลาด/ความจุ ต้องออกแบบด้วย HEC-RAS/SWMM</span>';
+      L.polyline(latlng, { color: "#ffffff", weight: 7, opacity: 0.9, lineCap: "round", lineJoin: "round" }).addTo(canalLayer);      // casing ขาว
+      L.polyline(latlng, { color: "#0891b2", weight: 3.5, opacity: 0.95, lineCap: "round", lineJoin: "round" }).bindPopup(popup).addTo(canalLayer);  // ตัวคลอง
+    });
+    // toggle ในแผงมาตรการ
+    var host = $("structToggles");
+    var el = document.createElement("label");
+    el.className = "struct-tog";
+    el.innerHTML =
+      '<input type="checkbox">' +
+      '<div><div class="t"><i class="ti ti-route" style="color:#0891b2;"></i> คลองระบายน้ำเส้นใหม่ (' + routes.length + ' เส้น)</div>' +
+      '<div class="d">แนวขุดคลองจากแอ่งแก้มลิง → แม่น้ำปัตตานี · least-cost เลี่ยงอาคาร · รวม ~' + totalKm.toFixed(1) + ' กม.' +
+      '<br><span style="color:#b45309;">ระบายน้ำฝนสะสม/น้ำท้องถิ่นออกจากเมือง — ขนาด/ความจุจริงต้อง HEC-RAS/SWMM</span></div></div>';
+    var cb = el.querySelector("input");
+    cb.dataset.kind = "canal";
+    cb.addEventListener("change", function () {
+      el.classList.toggle("on", cb.checked);
+      canalOn = cb.checked;
+      if (cb.checked) { if (lmap && !lmap.hasLayer(canalLayer)) canalLayer.addTo(lmap); }
+      else if (lmap) canalLayer.removeFrom(lmap);
+      if (IV3D.toggleCanal) IV3D.toggleCanal(cb.checked);
+      updateStats();                                     // นับรวมคลองในสรุปมาตรการ
+      if (cb.checked && routes[0]) focusPoint(routes[0].from.lng, routes[0].from.lat);
+    });
+    host.appendChild(el);
   }
 
   // ================= mount =================
@@ -207,6 +290,7 @@ window.IVViews = (function () {
 
     buildToggles();
     buildInfoMeasures();
+    buildCanals();
     updateStats();
     draw2D();
 
@@ -307,6 +391,17 @@ window.IVViews = (function () {
     var ni = document.getElementById("navIv"); if (ni) ni.href = "interventions.html?v=" + v;
   }
 
+  // นำสถานะ toggle (checkbox ที่ติ๊กไว้) ไปใช้กับเลเยอร์ 3D — กันกรณีติ๊กใน 2D ก่อน 3D จะ mount
+  function sync3DLayers() {
+    var boxes = document.querySelectorAll("#structToggles input[type=checkbox]");
+    Array.prototype.forEach.call(boxes, function (cb) {
+      if (!cb.checked) return;
+      var kind = cb.dataset.kind;
+      if (kind === "canal") { if (IV3D.toggleCanal) IV3D.toggleCanal(true); }
+      else if (kind && IV3D.toggleKind) { IV3D.toggleKind(kind, true); }
+    });
+  }
+
   // ================= สลับมุมมอง 2D/3D =================
   var fellBack3d = false;
   function switchView(v) {
@@ -318,8 +413,8 @@ window.IVViews = (function () {
     if (v === "3d") {
       d3.style.display = "block";
       if (m2) m2.style.visibility = "hidden";       // กัน Leaflet โผล่ทะลุ canvas 3D
-      if (!mount3dFn) { mount3dFn = true; IV3D.mount(d3, meta, on3dUnavailable); }
-      else IV3D.show && IV3D.show();
+      if (!mount3dFn) { mount3dFn = true; IV3D.mount(d3, meta, on3dUnavailable, sync3DLayers); }
+      else { IV3D.show && IV3D.show(); sync3DLayers(); }
     } else {
       d3.style.display = "none";
       if (m2) m2.style.visibility = "visible";
@@ -339,4 +434,4 @@ window.IVViews = (function () {
 })();
 
 // IV3D ถูกนิยามใน intervention_3d.js (Stage 3) — กันพังถ้ายังไม่โหลด
-window.IV3D = window.IV3D || { mount: function (el, _meta, onFail) { if (onFail) setTimeout(onFail, 50); }, onUpdate: function () {}, setFlow: function () {}, flyTo: function () {}, show: function () {}, hide: function () {} };
+window.IV3D = window.IV3D || { mount: function (el, _meta, onFail) { if (onFail) setTimeout(onFail, 50); }, onUpdate: function () {}, setFlow: function () {}, flyTo: function () {}, show: function () {}, hide: function () {}, toggleCanal: function () {}, toggleKind: function () {} };
