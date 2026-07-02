@@ -27,3 +27,6 @@ lisflood/inputs/
 
 # Claude Code local settings (per-user)
 .claude/settings.local.json
+
+# Local Netlify folder
+.netlify
