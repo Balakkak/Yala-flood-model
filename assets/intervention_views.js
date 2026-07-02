@@ -28,14 +28,22 @@ window.IVViews = (function () {
   // ================= 2D =================
   function draw2D() {
     if (!ctx) return;
-    var A = IVCompare.arrivals(), base = A.base, after = A.after;
+    var A = IVCompare.arrivals(), base = A.base, after = A.after, ctxArr = A.ctx;
     var ar = IVCompare.arrays(), inStudy = ar.inStudy, chan = ar.chanMask;
     var st = IVCompare.getStage(), split = IVCompare.getSplit(), splitCol = split * NC;
     var drain = IVCompare.getDrain();     // ความจุระบายจากมาตรการที่เปิด (แก้มลิง/คอขวด) → ฝั่ง "หลัง"
     var img = ctx.createImageData(NC, NR), d = img.data;
     for (var r = 0; r < NR; r++) for (var c = 0; c < NC; c++) {
       var i = r * NC + c, o = i * 4;
-      if (!inStudy[i] || chan[i]) { d[o + 3] = 0; continue; }
+      if (chan[i]) { d[o + 3] = 0; continue; }
+      if (!inStudy[i]) {
+        // นอกเขตเทศบาล = น้ำฉากหลัง (บริบท ให้ภาพต่อเนื่องกับหน้าจำลองน้ำท่วม) — จางกว่า ไม่เข้าสถิติ
+        if (ctxArr && ctxArr[i] <= st) {
+          var cc = depthColor(st - ctxArr[i]);
+          d[o] = cc[0]; d[o + 1] = cc[1]; d[o + 2] = cc[2]; d[o + 3] = 145;
+        } else { d[o + 3] = 0; }
+        continue;
+      }
       var useBefore = c < splitCol;
       var arr = useBefore ? base[i] : after[i];
       var dep = st - arr - (useBefore ? 0 : drain[i]);   // ฝั่งหลังหักความจุระบายของมาตรการที่เปิด
