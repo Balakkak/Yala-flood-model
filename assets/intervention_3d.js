@@ -24,6 +24,7 @@ window.IV3D = (function () {
   function buildArrays() {
     meta = IVCompare.meta(); NC = meta.NC; NR = meta.NR; N = meta.N;
     var ar = IVCompare.arrays(), A = IVCompare.arrivals(), ground = ar.ground, ff = IVCompare.flowField();
+    var inS = ar.inStudy, ctxA = A.ctx;    // น้ำฉากหลังนอกเขตเทศบาล (บริบท — เท่ากันทั้งก่อน/หลัง)
     drains = IVCompare.getDrain();
     M2 = maplibregl.MercatorCoordinate.fromLngLat({ lng: 101.285, lat: 6.547 }, 0).meterInMercatorCoordinateUnits();
     positions = new Float32Array(N * 2); uvs = new Float32Array(N * 2);
@@ -34,8 +35,9 @@ window.IV3D = (function () {
       var p = maplibregl.MercatorCoordinate.fromLngLat({ lng: lng, lat: lat }, 0);
       positions[i * 2] = p.x; positions[i * 2 + 1] = p.y; uvs[i * 2] = (c + 0.5) / NC; uvs[i * 2 + 1] = (r + 0.5) / NR;
       grounds[i] = ground[i];
-      arrB[i] = isFinite(A.base[i]) ? A.base[i] : 99999;
-      arrA[i] = isFinite(A.after[i]) ? A.after[i] : 99999;
+      var ctxV = (!inS[i] && ctxA && isFinite(ctxA[i])) ? ctxA[i] : 99999;   // นอกเขต → ใช้น้ำฉากหลัง
+      arrB[i] = isFinite(A.base[i]) ? A.base[i] : ctxV;
+      arrA[i] = isFinite(A.after[i]) ? A.after[i] : ctxV;
       flowArr[i * 2] = ff.fx[i]; flowArr[i * 2 + 1] = ff.fy[i];      // ทิศไหลใน uv-space (u=ตอ., v=ใต้)
       drainArr[i] = drains[i];
     }
@@ -284,8 +286,10 @@ window.IV3D = (function () {
 
   function updateAfterBuffer() {
     var A = IVCompare.arrivals(), ff = IVCompare.flowField(), drn = IVCompare.getDrain();
+    var inS = IVCompare.arrays().inStudy, ctxA = A.ctx;
     for (var i = 0; i < N; i++) {
-      arrA[i] = isFinite(A.after[i]) ? A.after[i] : 99999;
+      arrA[i] = isFinite(A.after[i]) ? A.after[i]
+        : ((!inS[i] && ctxA && isFinite(ctxA[i])) ? ctxA[i] : 99999);       // นอกเขต → น้ำฉากหลังคงเดิม
       flowArr[i * 2] = ff.fx[i]; flowArr[i * 2 + 1] = ff.fy[i];     // สนามการไหลเปลี่ยนตามคันกั้น → อ้อมสิ่งก่อสร้าง
       drainArr[i] = drn[i];
     }

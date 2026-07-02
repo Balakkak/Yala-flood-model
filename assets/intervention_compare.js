@@ -16,7 +16,7 @@ window.IVCompare = (function () {
   var NC, NR, N, ground, valid, chanMask, inStudy, bld;
   var OLON, OLAT, DLON, DLAT, DESIGN_S, FREEBOARD, STAGE;
   var sim, levees = [], enabled = {}, FR = null;
-  var baseArrival, afterArrival, statsCache, flowCache = null;
+  var baseArrival, afterArrival, ctxArrival, statsCache, flowCache = null;
   var split = 0.0;                 // 0 = ทั้งหมดเป็น "หลัง", 1 = ทั้งหมดเป็น "ก่อน"
   var listeners = [];
   var ready = false;
@@ -41,7 +41,8 @@ window.IVCompare = (function () {
   }
 
   // ---- Priority-Flood (minimax) 8-neighbour จาก channel seeds บน elevation ที่ให้มา ----
-  function priorityFlood(elev, channel) {
+  // full=true → ไม่จำกัดเขตศึกษา (ใช้ทำ "น้ำฉากหลัง" นอกเขตเทศบาล ให้ภาพต่อเนื่องกับหน้าจำลองน้ำท่วม)
+  function priorityFlood(elev, channel, full) {
     var arr = new Float32Array(N); arr.fill(Infinity);
     var k = [], v = [];
     var sw = function (a, b) { var x = k[a]; k[a] = k[b]; k[b] = x; var y = v[a]; v[a] = v[b]; v[b] = y; };
@@ -54,7 +55,7 @@ window.IVCompare = (function () {
       for (var d = 0; d < 8; d++) {
         var nb = c + NB[d];
         if (nb < 0 || nb >= N || !valid[nb]) continue;
-        if (!inStudy[nb] && !chanMask[nb]) continue;          // จำกัดเฉพาะในเขตศึกษา + แม่น้ำ
+        if (!full && !inStudy[nb] && !chanMask[nb]) continue; // โหมดปกติ: จำกัดเฉพาะในเขตศึกษา + แม่น้ำ
         if (Math.abs((nb % NC) - cx) > 1) continue;          // กันหลุดขอบแถว (wrap)
         var nl = L > elev[nb] ? L : elev[nb];
         if (nl < arr[nb]) { arr[nb] = nl; push(nl, nb); }
@@ -282,6 +283,8 @@ window.IVCompare = (function () {
     levees = sim.levees || [];
     levees.forEach(function (l) { enabled[l.rank] = false; });
     baseArrival = priorityFlood(ground, channel);
+    // น้ำ "ฉากหลัง" ทั้งกริด (นอกเขตเทศบาล) — บริบทภาพเท่านั้น เหมือนกันทั้งก่อน/หลัง ไม่เข้าสถิติ
+    ctxArrival = priorityFlood(ground, channel, true);
     computeAfter();
     computeCanals();                 // เตรียมแนวคลองระบายน้ำเส้นใหม่ (routing บนกริดจริง)
     ready = true;
@@ -343,7 +346,7 @@ window.IVCompare = (function () {
     flowField: function () { if (!flowCache) computeFlow(); return flowCache; },
     meta: function () { return { NC: NC, NR: NR, N: N, OLON: OLON, OLAT: OLAT, DLON: DLON, DLAT: DLAT, STAGE: STAGE, DESIGN_S: DESIGN_S }; },
     // เซลล์ → arrival ตามฝั่ง split (col < split*NC = ก่อน, มิฉะนั้น = หลัง)
-    arrivals: function () { return { base: baseArrival, after: afterArrival }; },
+    arrivals: function () { return { base: baseArrival, after: afterArrival, ctx: ctxArrival }; },
     arrays: function () { return { ground: ground, valid: valid, chanMask: chanMask, inStudy: inStudy, bld: bld, channel: sim._channel }; },
     boundsLatLng: function () { return [[OLAT - NR * DLAT, OLON], [OLAT, OLON + NC * DLON]]; }
   };
