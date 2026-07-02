@@ -15,6 +15,7 @@ window.IVViews = (function () {
 
   var $ = function (id) { return document.getElementById(id); };
   var fmt = function (n) { return Math.round(n).toLocaleString(); };
+  var applyLevelFn = null;
 
   // ---- สีตามความลึก (0→3 ม.) : ฟ้าอ่อน → ฟ้า → กรมท่า ----
   function lerp(a, b, t) { return [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)]; }
@@ -51,6 +52,9 @@ window.IVViews = (function () {
     IVCompare.levees().forEach(function (lv) {
       var lay = leveeLayers[lv.rank]; if (!lay) return;
       var on = IVCompare.isEnabled(lv.rank);
+      // แสดง/ซ่อน polygon ตามสถานะ (ไม่เพิ่มลงแผนที่ก่อนติ๊ก)
+      if (on) { if (!lmap.hasLayer(lay)) lay.addTo(lmap); }
+      else lay.removeFrom(lmap);
       lay.setStyle({ color: "#2563eb", weight: on ? 3 : 1.5, opacity: on ? 1 : 0.55,
         fillColor: "#3b82f6", fillOpacity: on ? 0.18 : 0, dashArray: on ? null : "5,5" });
     });
@@ -96,6 +100,16 @@ window.IVViews = (function () {
       cb.addEventListener("change", function () {
         el.classList.toggle("on", cb.checked);
         IVCompare.toggle(lv.rank, cb.checked);
+        if (window.toggleLayerVisibility) {
+          window.toggleLayerVisibility('levee', cb.checked);
+        }
+        if (cb.checked && applyLevelFn) {
+          var s = IVCompare.getStage(), rg = IVCompare.stageRange();
+          if (s <= rg.min + 0.05) {
+            $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100;
+            applyLevelFn();
+          }
+        }
         if (view === "2d" && lmap) lmap.panInsideBounds && fitToActive();
       });
       host.appendChild(el);
@@ -112,38 +126,59 @@ window.IVViews = (function () {
   // ================= มาตรการเชิงข้อมูล (คอขวด/แก้มลิง) — ยังไม่จำลองผล รอ SWMM =================
   function buildInfoMeasures() {
     var host = $("structToggles");
-    fetch("data/intervention_candidates.geojson").then(function (r) { return r.json(); }).then(function (fc) {
+    fetch("data/intervention_candidates.geojson?t=" + Date.now()).then(function (r) { return r.json(); }).then(function (fc) {
       var pts = (fc.features || []).filter(function (f) {
-        return f.geometry && f.geometry.type === "Point" && (f.properties.kind === "bottleneck" || f.properties.kind === "retention");
+        return f.geometry && f.geometry.type === "Point" && (f.properties.kind === "bottleneck" || f.properties.kind === "retention" || f.properties.kind === "floodgate");
       });
       if (!pts.length) return;
       var wrap = document.createElement("div");
-      wrap.innerHTML = '<div class="info-divider"><i class="ti ti-flask"></i> มาตรการเสริม · กดเพื่อดูตำแหน่งบนแผนที่ — ยังไม่จำลองผลลดน้ำท่วม (รอ SWMM)</div>';
-      // แก้มลิงก่อน แล้วคอขวด (ให้ตรงลำดับในรายการแนะนำ)
-      pts.sort(function (a, b) { return (a.properties.kind === "retention" ? 0 : 1) - (b.properties.kind === "retention" ? 0 : 1); });
+      wrap.innerHTML = '<div class="info-divider"><i class="ti ti-flask"></i> มาตรการกายภาพแนะนำ (บ่อหน่วง/ขยายท่อ/ประตูระบาย) — เลือกเพื่อดูตำแหน่งบนแผนที่</div>';
+      // แก้มลิงก่อน แล้วคอขวด แล้วประตูระบาย
+      pts.sort(function (a, b) {
+        var ka = a.properties.kind, kb = b.properties.kind;
+        var oa = ka === "retention" ? 1 : (ka === "bottleneck" ? 2 : 3);
+        var ob = kb === "retention" ? 1 : (kb === "bottleneck" ? 2 : 3);
+        return oa - ob;
+      });
       pts.forEach(function (f) {
-        var p = f.properties, isPond = p.kind === "retention";
+        var p = f.properties, kind = p.kind;
         var lng = f.geometry.coordinates[0], lat = f.geometry.coordinates[1];
-        var icon = isPond ? "ti-droplet" : "ti-windmill", col = isPond ? "#0f766e" : "#c2410c";
+        var icon, col;
+        if (kind === "retention") { icon = "ti-droplet"; col = "#0d9488"; }
+        else if (kind === "bottleneck") { icon = "ti-windmill"; col = "#ea580c"; }
+        else { icon = "ti-door"; col = "#7c3aed"; }
+
         var detail;
-        if (isPond) {
+        if (kind === "retention") {
           var land = (p.buildings_on_site === 0 && (p.road_on_site || 0) === 0) ? " · ที่ว่าง ไม่ทับอาคาร/ถนน"
             : (p.buildings_on_site === 0 ? " · เลี่ยงอาคารแล้ว" + ((p.road_on_site || 0) > 0 ? " (มีถนนพาด)" : "")
             : (p.buildings_on_site != null ? " · มีอาคาร ~" + p.buildings_on_site + " หลัง" : ""));
           detail = "บ่อหน่วง ~" + (p.area_rai || "?") + " ไร่ · เก็บ ~" + ((p.storage_m3 || 0).toLocaleString()) + " ลบ.ม." + land;
-        } else {
+        } else if (kind === "bottleneck") {
           var spot = p.relocated ? " · ขยับเลี่ยงอาคารแล้ว" : (p.on_road ? " · ตั้งริมถนนได้" : "");
           detail = "ความจุระบายปัจจุบัน " + (p.drain_cm != null ? p.drain_cm + " ซม." : "ต่ำ") + " · ควรเพิ่มท่อ/สูบ" + spot;
+        } else {
+          detail = "ติดตั้งตรงจุดน้ำล้นริมคลอง/แม่น้ำหลัก เพื่อบล็อกน้ำไหลย้อนเข้าท่อ";
         }
-        var row = document.createElement("div");
-        row.className = "struct-info";
-        row.innerHTML = '<i class="ti ' + icon + '" style="color:' + col + ';margin-top:1px;"></i>'
-          + '<div style="flex:1;"><div class="t" style="font-size:12px;font-weight:700;color:var(--ink-900);">' + esc(p.label)
-          + ' <span class="info-badge">เชิงข้อมูล</span></div>'
-          + '<div class="d" style="font-size:10.5px;color:var(--ink-600);margin-top:2px;line-height:1.45;">' + esc(detail) + '</div></div>'
-          + '<i class="ti ti-map-pin" style="color:var(--ink-400);margin-top:1px;"></i>';
-        row.addEventListener("click", function () { focusPoint(lng, lat); });
-        wrap.appendChild(row);
+
+        var el = document.createElement("label");
+        el.className = "struct-tog";
+        el.innerHTML =
+          '<input type="checkbox">' +
+          '<div><div class="t"><i class="ti ' + icon + '" style="color:' + col + ';"></i> ' + p.label + '</div>' +
+          '<div class="d">' + esc(detail) + '</div></div>';
+        
+        var cb = el.querySelector("input");
+        cb.addEventListener("change", function () {
+          el.classList.toggle("on", cb.checked);
+          if (window.toggleLayerVisibility) {
+            window.toggleLayerVisibility(kind, cb.checked);
+          }
+          if (cb.checked) {
+            focusPoint(lng, lat);
+          }
+        });
+        wrap.appendChild(el);
       });
       host.appendChild(wrap);
     }).catch(function (e) { console.warn("info measures โหลดไม่ได้", e); });
@@ -156,14 +191,16 @@ window.IVViews = (function () {
 
     canvas = document.createElement("canvas"); canvas.width = NC; canvas.height = NR;
     ctx = canvas.getContext("2d");
+    // custom pane z-index 450 เพื่อให้ flood canvas อยู่เหนือ vector layers (z-index 400) เสมอ
+    lmap.createPane("floodPane"); lmap.getPane("floodPane").style.zIndex = 450;
     floodOverlay = L.imageOverlay("", IVCompare.boundsLatLng(),
-      { opacity: 0.8, interactive: false, className: "iv-flood", pane: "overlayPane" }).addTo(lmap);
+      { opacity: 0.8, interactive: false, className: "iv-flood", pane: "floodPane" }).addTo(lmap);
 
-    // โพลิกอนคันกั้น (เน้นเมื่อเปิด)
+    // โพลิกอนคันกั้น (สร้างไว้ แต่ไม่เพิ่มลงแผนที่ก่อน — styleLevees จัดการแสดง/ซ่อน)
     IVCompare.levees().forEach(function (lv) {
       if (!lv.polygon || lv.polygon.length < 3) return;
       var latlng = lv.polygon.map(function (p) { return [p[1], p[0]]; });
-      leveeLayers[lv.rank] = L.polygon(latlng, {}).addTo(lmap)
+      leveeLayers[lv.rank] = L.polygon(latlng, {})   // ยังไม่ addTo(lmap)
         .bindPopup("<b>" + lv.label + "</b><br>ป้องกัน ~" + lv.protected + " หลัง" + (lv.needs_pump ? "<br><span style='color:#b45309'>* ต้องมีสถานีสูบร่วม</span>" : ""));
     });
     styleLevees();
@@ -185,6 +222,7 @@ window.IVViews = (function () {
       IVCompare.setStage(IVCompare.stageFromInputs(rain, river, dam));
       try { localStorage.setItem("yalaSim", JSON.stringify({ rain: rain, river: river, dam: dam })); } catch (e) {}   // แชร์ระดับน้ำกับหน้าจำลอง
     }
+    applyLevelFn = applyLevel;
     function updateLevelReadout() {
       var s = IVCompare.getStage(), rg = IVCompare.stageRange(), tag = $("lvlTag");
       $("lvlStage").textContent = s.toFixed(2);
@@ -201,25 +239,26 @@ window.IVViews = (function () {
     });
 
     // ---- อนิเมชัน "จำลองการท่วม": ไล่ระดับน้ำจากแห้ง → เป้าหมาย (น้ำแพร่ตามลำดับการท่วม) ----
-    var playTimer = null, PLAY_MS = 7000;
-    function targetStage() { return IVCompare.stageFromInputs(+$("sRain").value, +$("sRiver").value, +$("sDam").value); }
-    function setPlayBtn(on) {
-      $("btnPlayFlood").classList.toggle("playing", on);
-      $("playIcon").className = on ? "ti ti-player-stop-filled" : "ti ti-player-play-filled";
-      $("playLabel").textContent = on ? "หยุด" : "จำลองการท่วม";
+    var playTimer = null;
+    function stopPlay() {
+      if (playTimer) { clearInterval(playTimer); playTimer = null; }
+      var btn = $("btnPlayFlood");
+      if (btn) { btn.classList.remove("playing"); btn.innerHTML = '<i class="ti ti-droplet-filled-2"></i> จำลองน้ำท่วม'; }
     }
-    function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; } setPlayBtn(false); }
+    IVViews.stopPlay = stopPlay;   // expose เพื่อให้ chkLevee handler หยุด animation ก่อนเปลี่ยนระดับน้ำ
     function playFlood() {
-      if (playTimer) { stopPlay(); IVCompare.setStage(targetStage()); return; }
-      var rg = IVCompare.stageRange(), from = rg.min, to = targetStage();
-      if (to <= from + 0.01) return;
-      var t0 = performance.now();
-      setPlayBtn(true);
-      playTimer = setInterval(function () {            // setInterval ทำงานแม้แท็บไม่โฟกัส (rAF ถูกพัก)
-        var k = Math.min(1, (performance.now() - t0) / PLAY_MS);
-        IVCompare.setStage(from + (to - from) * (k * k * (3 - 2 * k)));   // ease-in-out
-        if (k >= 1) { clearInterval(playTimer); playTimer = null; setPlayBtn(false); }
-      }, 33);
+      if (playTimer) { stopPlay(); return; }
+      var rng = IVCompare.stageRange();
+      var base = rng.min, target = IVCompare.stageFromInputs(+$("sRain").value, +$("sRiver").value, +$("sDam").value);
+      var steps = 28, step = 0;
+      var btn = $("btnPlayFlood");
+      if (btn) { btn.classList.add("playing"); btn.innerHTML = '<i class="ti ti-square-filled"></i> หยุด'; }
+      IVCompare.setStage(base);
+      playTimer = setInterval(function () {
+        step++;
+        IVCompare.setStage(base + (target - base) * (step / steps));
+        if (step >= steps) stopPlay();
+      }, 250);
     }
 
     ["sRain", "sRiver", "sDam"].forEach(function (id) { $(id).addEventListener("input", function () { stopPlay(); applyLevel(); }); });
@@ -252,7 +291,8 @@ window.IVViews = (function () {
       if (s.dam != null) $("sDam").value = s.dam;
       var note = $("simNote"); if (note) note.style.display = "flex";
     })();
-    applyLevel();                      // ตั้งระดับน้ำเริ่มต้น (จากระดับที่จำลองไว้ ถ้ามี)
+    // เริ่มด้วยสภาวะแห้ง (ไม่โหลดค่าน้ำท่วมจาก localStorage) — ผู้ใช้กด "จำลองน้ำท่วม" เพื่อเริ่ม
+    IVCompare.setStage(IVCompare.stageRange().min);
     updateLevelReadout();
     // มุมมองเริ่มต้นตาม ?v= (มาจากปุ่มหน้าต่างบนแถบนำทาง) — ค่าเริ่มต้น 3D
     var v0 = (new URLSearchParams(location.search).get("v") === "2d") ? "2d" : "3d";

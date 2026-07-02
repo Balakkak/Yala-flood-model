@@ -21,6 +21,9 @@ window.IVCompare = (function () {
   var listeners = [];
   var ready = false;
   var CELL_M2 = 30 * 30;
+  var drainM;
+  var retentionCells = [], retentionCenters = [], bottleneckPoints = [], floodgateCells = [];
+  var infoEnabled = { retention: false, bottleneck: false, floodgate: false };
 
   function emit(kind) { listeners.forEach(function (f) { try { f(kind); } catch (e) { console.warn(e); } }); }
   var lonOf = function (c) { return OLON + (c + 0.5) * DLON; };
@@ -49,6 +52,7 @@ window.IVCompare = (function () {
       for (var d = 0; d < 8; d++) {
         var nb = c + NB[d];
         if (nb < 0 || nb >= N || !valid[nb]) continue;
+        if (!inStudy[nb] && !chanMask[nb]) continue;          // จำกัดเฉพาะในเขตศึกษา + แม่น้ำ
         if (Math.abs((nb % NC) - cx) > 1) continue;          // กันหลุดขอบแถว (wrap)
         var nl = L > elev[nb] ? L : elev[nb];
         if (nl < arr[nb]) { arr[nb] = nl; push(nl, nb); }
@@ -58,11 +62,57 @@ window.IVCompare = (function () {
   }
 
   // depth = STAGE − arrival เฉพาะ "น้ำท่วมในเมือง" (ในเขตศึกษา, ไม่ใช่ร่องน้ำจริง)
-  function isCityFlooded(arr, i) { return inStudy[i] && !chanMask[i] && arr[i] <= STAGE; }
+  function isCityFlooded(arr, i, currentDrain) {
+    var d = currentDrain ? currentDrain[i] : (drainM ? drainM[i] : 0);
+    return inStudy[i] && !chanMask[i] && arr[i] <= STAGE && (STAGE - arr[i] - d > 0.03);
+  }
+  function getActiveDrain() {
+    var d = new Float32Array(N);
+    if (drainM) {
+      for (var i = 0; i < N; i++) d[i] = drainM[i];
+    }
+    if (infoEnabled.retention) {
+      for (var pi = 0; pi < retentionCells.length; pi++) {
+        var idx = retentionCells[pi];
+        if (idx >= 0 && idx < N) d[idx] += 2.5;
+      }
+      for (var pc = 0; pc < retentionCenters.length; pc++) {
+        var pt = retentionCenters[pc];
+        var r0 = pt.latIdx, c0 = pt.lngIdx;
+        var rad = 4;
+        for (var r = Math.max(0, r0 - rad); r <= Math.min(NR - 1, r0 + rad); r++) {
+          for (var c = Math.max(0, c0 - rad); c <= Math.min(NC - 1, c0 + rad); c++) {
+            var idx = r * NC + c;
+            d[idx] += 0.6;
+          }
+        }
+      }
+    }
+    if (infoEnabled.bottleneck) {
+      for (var bi = 0; bi < bottleneckPoints.length; bi++) {
+        var pt = bottleneckPoints[bi];
+        var r0 = pt.latIdx, c0 = pt.lngIdx;
+        var rad = 5;
+        for (var r = Math.max(0, r0 - rad); r <= Math.min(NR - 1, r0 + rad); r++) {
+          for (var c = Math.max(0, c0 - rad); c <= Math.min(NC - 1, c0 + rad); c++) {
+            var idx = r * NC + c;
+            d[idx] += 1.0;
+          }
+        }
+      }
+    }
+    return d;
+  }
   function statsOf(arr) {
     var cells = 0, vol = 0, b = 0;
+    var currentDrain = getActiveDrain();
     for (var i = 0; i < N; i++) {
-      if (isCityFlooded(arr, i)) { cells++; vol += (STAGE - arr[i]); b += bld[i]; }
+      if (isCityFlooded(arr, i, currentDrain)) {
+        cells++;
+        var d = STAGE - arr[i] - currentDrain[i];
+        vol += d > 0 ? d : 0;
+        b += bld[i];
+      }
     }
     return { cells: cells, area_rai: Math.round(cells * CELL_M2 / 1600),
              volume_m3: Math.round(vol * CELL_M2), buildings: Math.round(b) };
@@ -75,6 +125,23 @@ window.IVCompare = (function () {
       var lv = levees[li];
       if (!enabled[lv.rank]) continue;
       for (var w = 0; w < lv.wall_cells.length; w++) { var i = lv.wall_cells[w]; if (valid[i]) elev[i] = Math.max(elev[i], wall); }
+    }
+    if (infoEnabled.floodgate) {
+      for (var fi = 0; fi < floodgateCells.length; fi++) {
+        var idx = floodgateCells[fi];
+        if (valid[idx]) {
+          elev[idx] = Math.max(elev[idx], wall);
+          var r = Math.floor(idx / NC), c = idx % NC;
+          var DR = [-1, 1, 0, 0], DC = [0, 0, -1, 1];
+          for (var d = 0; d < 4; d++) {
+            var nr = r + DR[d], nc = c + DC[d];
+            if (nr >= 0 && nr < NR && nc >= 0 && nc < NC) {
+              var nidx = nr * NC + nc;
+              if (valid[nidx]) elev[nidx] = Math.max(elev[nidx], wall);
+            }
+          }
+        }
+      }
     }
     return elev;
   }
@@ -117,14 +184,16 @@ window.IVCompare = (function () {
 
   async function init() {
     if (ready) return api;
+    var t = Date.now();
     var res = await Promise.all([
-      fetch("data/dem_grid.json").then(function (r) { return r.json(); }),
-      fetch("data/buildings_grid.json").then(function (r) { return r.json(); }),
-      fetch("data/yala_boundary.geojson").then(function (r) { return r.json(); }),
-      fetch("data/intervention_sim.json").then(function (r) { return r.json(); }),
-      fetch("data/flood_response.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+      fetch("data/dem_grid.json?t=" + t).then(function (r) { return r.json(); }),
+      fetch("data/buildings_grid.json?t=" + t).then(function (r) { return r.json(); }),
+      fetch("data/yala_boundary.geojson?t=" + t).then(function (r) { return r.json(); }),
+      fetch("data/intervention_sim.json?t=" + t).then(function (r) { return r.json(); }),
+      fetch("data/flood_response.json?t=" + t).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+      fetch("data/intervention_candidates.geojson?t=" + t).then(function (r) { return r.json(); }).catch(function () { return null; })
     ]);
-    var G = res[0], BG = res[1], B = res[2]; sim = res[3]; FR = res[4];
+    var G = res[0], BG = res[1], B = res[2]; sim = res[3]; FR = res[4]; var cand = res[5];
     NC = G.ncols; NR = G.nrows; N = NC * NR;
     OLON = G.origin_lon; OLAT = G.origin_lat; DLON = G.dlon; DLAT = G.dlat;
     DESIGN_S = sim.design_stage_m; FREEBOARD = sim.freeboard_m; STAGE = DESIGN_S;
@@ -142,6 +211,37 @@ window.IVCompare = (function () {
       var ii = r * NC + c;
       if (valid[ii] && pin(lonOf(c), latOf(r), ring)) inStudy[ii] = 1;
     }
+    drainM = new Float32Array(N);
+    if (G.drain_cm) {
+      for (var i = 0; i < N; i++) drainM[i] = (G.drain_cm[i] || 0) / 100;
+    }
+    retentionCells = [];
+    retentionCenters = [];
+    bottleneckPoints = [];
+    floodgateCells = [];
+    if (cand && cand.features) {
+      cand.features.forEach(function (f) {
+        var p = f.properties || {}, g = f.geometry || {};
+        if (g.type === "Point") {
+          var lng = g.coordinates[0], lat = g.coordinates[1];
+          var c = Math.floor((lng - OLON) / DLON), r = Math.floor((OLAT - lat) / DLAT);
+          var idx = r * NC + c;
+          if (p.kind === "retention") {
+            retentionCenters.push({ latIdx: r, lngIdx: c });
+            if (p.cells && p.cells.length) {
+              p.cells.forEach(function (cell) {
+                var cc = Math.floor((cell[0] - OLON) / DLON), rr = Math.floor((OLAT - cell[1]) / DLAT);
+                retentionCells.push(rr * NC + cc);
+              });
+            }
+          } else if (p.kind === "bottleneck") {
+            bottleneckPoints.push({ latIdx: r, lngIdx: c });
+          } else if (p.kind === "floodgate") {
+            floodgateCells.push(idx);
+          }
+        }
+      });
+    }
     levees = sim.levees || [];
     levees.forEach(function (l) { enabled[l.rank] = false; });
     baseArrival = priorityFlood(ground, channel);
@@ -157,7 +257,11 @@ window.IVCompare = (function () {
     subscribe: function (cb) { listeners.push(cb); },
     toggle: function (rank, on) {
       enabled[rank] = (on == null) ? !enabled[rank] : !!on;
-      computeAfter(); emit("after");
+      computeAfter();
+      console.log("toggle rank:", rank, "enabled:", enabled[rank], "STAGE:", STAGE);
+      console.log("base flooded:", baseArrival.filter(function(x){ return isFinite(x) && x <= STAGE; }).length);
+      console.log("after flooded:", afterArrival.filter(function(x){ return isFinite(x) && x <= STAGE; }).length);
+      emit("after");
     },
     isEnabled: function (rank) { return !!enabled[rank]; },
     enabledCount: function () { return levees.filter(function (l) { return enabled[l.rank]; }).length; },
@@ -166,6 +270,11 @@ window.IVCompare = (function () {
     splitLon: function () { return OLON + split * NC * DLON; },
     levees: function () { return levees; },
     stats: function () { return statsCache; },
+    getDrain: getActiveDrain,
+    toggleInfo: function (kind, on) {
+      infoEnabled[kind] = (on == null) ? !infoEnabled[kind] : !!on;
+      computeAfter(); emit("after");
+    },
     // ---- ระดับน้ำปรับได้ (ฝน/แม่น้ำ/เขื่อน → ระดับน้ำ) ----
     stageFromInputs: function (rain, river, dam) {
       if (!FR) return STAGE;
