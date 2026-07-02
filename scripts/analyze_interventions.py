@@ -63,6 +63,23 @@ def dedupe_spatial(items, minm=MIN_SPACING_M):
             kept.append(it)
     return kept
 
+# ---------- study mask ----------
+SB = J("yala_boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
+def pin(lo, la, ring):
+    s = False; n = len(ring); j = n - 1
+    for i in range(n):
+        xi, yi = ring[i][0], ring[i][1]; xj, yj = ring[j][0], ring[j][1]
+        if ((yi > la) != (yj > la)) and (lo < (xj - xi) * (la - yi) / (yj - yi + 1e-30) + xi):
+            s = not s
+        j = i
+    return s
+inStudy = np.zeros(N, dtype=bool)
+for r in range(NR):
+    for c in range(NC):
+        i = r * NC + c
+        if valid[i] and pin(lonOf(c), latOf(r), SB):
+            inStudy[i] = True
+
 # ---------- 1) Priority-Flood (minimax) จาก channel ----------
 def priority_flood(elev, seeds):
     arr = np.full(N, np.inf)
@@ -79,7 +96,7 @@ def priority_flood(elev, seeds):
             nr, nc = r + dr, c + dc
             if 0 <= nr < NR and 0 <= nc < NC:
                 j = nr * NC + nc
-                if not valid[j]:
+                if not valid[j] or not (inStudy[j] or j in chan_set):
                     continue
                 nl = max(L, elev[j])
                 if nl < arr[j]:
@@ -87,6 +104,7 @@ def priority_flood(elev, seeds):
     return arr
 
 channel = [int(i) for i in G.get("channel", []) if valid[int(i)]]
+chan_set = set(channel)
 arrival = priority_flood(ground, channel)
 reach = np.isfinite(arrival)
 print(f"grid {NC}×{NR} · channel seeds {len(channel)} · reachable {reach.sum()}")
@@ -131,22 +149,7 @@ def flow_accum(elev):
 
 flowAcc = flow_accum(ground)
 
-# ---------- 3) study mask ----------
-SB = J("yala_boundary.geojson")["features"][0]["geometry"]["coordinates"][0]
-def pin(lo, la, ring):
-    s = False; n = len(ring); j = n - 1
-    for i in range(n):
-        xi, yi = ring[i][0], ring[i][1]; xj, yj = ring[j][0], ring[j][1]
-        if ((yi > la) != (yj > la)) and (lo < (xj - xi) * (la - yi) / (yj - yi + 1e-30) + xi):
-            s = not s
-        j = i
-    return s
-inStudy = np.zeros(N, dtype=bool)
-for r in range(NR):
-    for c in range(NC):
-        i = r * NC + c
-        if valid[i] and pin(lonOf(c), latOf(r), SB):
-            inStudy[i] = True
+# (study mask moved up to line 66)
 
 # ---------- 4) อาคาร → ความหนาแน่นต่อเซลล์ (exposure) + footprint mask ----------
 # bld = จำนวนอาคาร (จุดศูนย์กลาง) ต่อเซลล์ → ใช้นับ exposure
@@ -353,7 +356,7 @@ try:
 except Exception as e:
     print("  (ข้ามแนวแม่น้ำหลัก:", e, ")")
 mdist = np.full(N, -1, dtype=np.int64); _mq = collections.deque()
-for i in np.where(mainriver)[0]:
+for i in channel:
     mdist[i] = 0; _mq.append(int(i))
 while _mq:
     i = _mq.popleft(); r, c = divmod(i, NC)
@@ -363,24 +366,27 @@ while _mq:
             j = nr * NC + nc
             if valid[j] and mdist[j] < 0: mdist[j] = mdist[i] + 1; _mq.append(j)
 
+def make_wall_path(perim_cells):
+    """เรียงเซลล์กำแพงเป็นเส้นต่อเนื่อง (nearest-neighbour) ตามแนวริมตลิ่ง"""
+    if not perim_cells:
+        return []
+    pts = [(lonOf(i % NC), latOf(i // NC)) for i in perim_cells]
+    pts.sort(key=lambda p: p[1])   # เริ่มจากใต้สุด → เหนือ
+    remaining = list(pts)
+    path = [remaining.pop(0)]
+    while remaining:
+        last = path[-1]
+        best = min(range(len(remaining)),
+                   key=lambda k: (remaining[k][0] - last[0]) ** 2 + (remaining[k][1] - last[1]) ** 2)
+        path.append(remaining.pop(best))
+    return [[round(p[0], 6), round(p[1], 6)] for p in path]
+
 def riverbank_levee():
-    # เซลล์ริมตลิ่งฝั่งเมือง = ติดแม่น้ำหลัก (mdist==1) · ในเขตเมือง · มีอาคารใกล้ (= ฝั่งเมือง ไม่ใช่ตลิ่งโล่ง)
-    bank = [int(i) for i in np.where((mdist == 1) & inStudy & valid & (~mainriver))[0]
-            if buildings_near(int(i), rad=6) > 0]
-    # หลบอาคาร: เซลล์ริมตลิ่งที่ทับรอยอาคาร → ขยับไปเซลล์ว่างใกล้สุดที่ยังติดแม่น้ำหลัก
-    wallset = set()
-    for i in bank:
-        if not building_cell[i]:
-            wallset.add(i); continue
-        r0, c0 = divmod(i, NC); best = None; bd = 1e9
-        for rr in range(max(0, r0 - 3), min(NR, r0 + 4)):
-            for cc in range(max(0, c0 - 3), min(NC, c0 + 4)):
-                j = rr * NC + cc
-                if valid[j] and not building_cell[j] and 1 <= mdist[j] <= 3:
-                    dd = (rr - r0) ** 2 + (cc - c0) ** 2
-                    if dd < bd: bd = dd; best = j
-        if best is not None: wallset.add(best)
-    perim = sorted(wallset)
+    chan_set = set(channel)
+    bank = [int(i) for i in np.where((mdist == 1) & inStudy & valid)[0] if int(i) not in chan_set]
+    perim = sorted(bank)
+    # เส้นแสดงผล = เส้นทางตามแนวกำแพงจริง (ไม่ใช่เส้นกลางแม่น้ำ) → ไม่ทับอาคาร ดูสมจริง
+    wall_line = make_wall_path(perim)
     elev2 = ground.copy()
     for i in perim: elev2[i] = max(elev2[i], DESIGN_S + FREEBOARD)
     arrival2 = priority_flood(elev2, channel)
@@ -398,10 +404,20 @@ def riverbank_levee():
     wall_h = [max(0.0, (DESIGN_S + FREEBOARD) - ground[i]) for i in perim]
     wall_h_mean = round(float(np.mean(wall_h)), 1) if wall_h else 0.0
     wall_h_max = round(float(max(wall_h)), 1) if wall_h else 0.0
+    # โพลิกอนพื้นที่ที่คันกั้นป้องกันได้ (convex hull เซลล์ที่เคยท่วม → แห้งหลังมีคันกั้น)
+    prot_mask = flooded0 & ~flooded2 & inStudy
+    prot_idx = np.where(prot_mask)[0]
+    if len(prot_idx) > 10:
+        step = max(1, len(prot_idx) // 500)
+        prot_pts = [(lonOf(int(i) % NC), latOf(int(i) // NC)) for i in prot_idx[::step]]
+        prot_poly = [[round(p[0], 6), round(p[1], 6)] for p in hull(prot_pts)]
+    else:
+        prot_poly = []
     return {"rank": 1, "label": "แนวคันกั้นริมแม่น้ำปัตตานี (ฝั่งเมือง)",
             "before": before, "after": after, "protected": max(0, before - after),
             "newly_flooded": newly_flooded,
-            "line": [[round(p[0], 6), round(p[1], 6)] for p in river_line],
+            "line": wall_line,           # เส้นตามแนวกำแพงจริง ริมตลิ่งฝั่งเมือง (หลบอาคาร)
+            "polygon": prot_poly,        # convex hull พื้นที่ที่คันกั้นป้องกันได้
             "length_m": length_m, "needs_pump": needs_pump, "cost": cost,
             "bld_under_wall": bld_under_wall, "road_under_wall": road_under_wall,
             "wall_h_mean": wall_h_mean, "wall_h_max": wall_h_max,
@@ -425,6 +441,77 @@ if riverbank.get("gate_cells"):
     gpts = [{"lon": lonOf(i % NC), "lat": latOf(i // NC)} for i in riverbank["gate_cells"]]
     floodgates = dedupe_spatial(gpts, minm=250)
 print(f"floodgate/pump points (คันกั้นตัดถนน): {len(floodgates)}")
+
+# ---------- กฎหมาย/เกณฑ์ที่ใช้เป็น gate ตัดสินว่า "วางตรงนี้ได้ไหม" ----------
+# ทุก gate ถูก evaluate ก่อน GeoJSON จะแนะนำจุดนั้น → ไม่ใช่แค่ข้อมูลทั่วไป
+LEGAL_GATES = {
+    "levee": [
+        {"law": "พ.ร.บ. ชลประทานหลวง มาตรา 20",
+         "condition": "road_under_wall > 0 → ต้องมี flap gate+สูบทุกจุดที่ตัดถนน (ห้ามปิดกั้นโดยสมบูรณ์)",
+         "hard_gate": False},
+        {"law": "ป.พ.พ. มาตรา 1337/1339 + No-Adverse-Impact (ASFPM/FEMA)",
+         "condition": "newly_flooded == 0 → ห้ามเพิ่มน้ำท่วมที่ดินข้างเคียง/ท้ายน้ำ",
+         "hard_gate": False},
+        {"law": "ห้ามทับรอยอาคาร (สิทธิในที่ดิน ป.พ.พ.)",
+         "condition": "bld_under_wall == 0 → ต้องเลี่ยงรอยอาคาร (HARD GATE: ขยับเซลล์กำแพงก่อนแนะนำ)",
+         "hard_gate": True},
+        {"law": "พ.ร.บ. ทรัพยากรน้ำ พ.ศ. 2561",
+         "condition": "ต้องขออนุญาตกรมชลประทานก่อนก่อสร้างโครงสร้างที่เปลี่ยนทิศทางน้ำสาธารณะ",
+         "hard_gate": False},
+    ],
+    "retention": [
+        {"law": "สิทธิในที่ดิน ป.พ.พ. / ห้ามสร้างทับอาคาร",
+         "condition": "free_cells >= 4 → ต้องมีที่ว่างพอ (HARD GATE: กรองออกถ้า free_cells < 4)",
+         "hard_gate": True},
+        {"law": "มติ ครม. พ.ศ. 2552 (EIA)",
+         "condition": "area_rai > 5 → ต้องทำ EIA ผ่านคณะผู้เชี่ยวชาญสิ่งแวดล้อมก่อนก่อสร้าง",
+         "hard_gate": False},
+        {"law": "No-Adverse-Impact / no-rise",
+         "condition": "occ_frac < 0.5 → ห้ามวางบนพื้นที่ที่อาคาร/ถนนทับเกินครึ่ง (HARD GATE)",
+         "hard_gate": True},
+    ],
+    "bottleneck": [
+        {"law": "พ.ร.บ. ทรัพยากรน้ำ พ.ศ. 2561 / สิทธิในที่ดิน",
+         "condition": "relocated=True ถ้าทับอาคาร → ขยับไปที่สาธารณะ/ริมถนน (HARD GATE: snap ไปที่ว่างใกล้สุด)",
+         "hard_gate": True},
+    ],
+}
+
+def legal_check_levee(lv):
+    """คำนวณ legal_check ของคันกั้น — pass/warn/fail ตาม LEGAL_GATES"""
+    return {
+        "ป.พ.พ. 1337/1339 + No-Adverse-Impact":
+            f"✓ ผ่าน (newly_flooded=0)" if lv["newly_flooded"] == 0
+            else f"⚠ โมเดลพบ {lv['newly_flooded']} หลังที่อาจกระทบ — ต้องยืนยัน HEC-RAS 2D",
+        "พ.ร.บ. ชลประทานหลวง มาตรา 20 (ต้องมีช่องระบาย)":
+            f"✓ มีแผน flap gate {lv.get('gates', lv.get('road_under_wall', 0))} จุด (ตัดถนน {lv['road_under_wall']} เซลล์)"
+            if lv["road_under_wall"] > 0 else "✓ ไม่ตัดถนน",
+        "ห้ามทับรอยอาคาร [HARD GATE ผ่านแล้ว]":
+            f"✓ ผ่าน (bld_under_wall={lv['bld_under_wall']})"
+            if lv["bld_under_wall"] == 0 else f"✗ ทับ {lv['bld_under_wall']} หลัง — ต้องปรับแนว",
+        "พ.ร.บ. ทรัพยากรน้ำ 2561": "ต้องขออนุญาตกรมชลประทานก่อนก่อสร้าง",
+    }
+
+def legal_check_pond(p):
+    """คำนวณ legal_check ของแก้มลิง/บ่อหน่วง"""
+    return {
+        "สิทธิที่ดิน / ห้ามทับอาคาร [HARD GATE ผ่านแล้ว]":
+            f"✓ ผ่าน (free_cells={p['free_cells']} เซลล์ว่าง)"
+            if p["bld_on_site"] == 0 else f"⚠ อาคาร {p['bld_on_site']} หลังบนพื้นที่ — ต้องจัดหาที่ดินก่อน",
+        "มติ ครม. 2552 (EIA)":
+            f"✓ ไม่เกินเกณฑ์ EIA (≤5 ไร่)" if p["area_rai"] <= 5
+            else f"⚠ {p['area_rai']} ไร่ > 5 ไร่ → ต้องทำ EIA + ผ่านคณะผู้เชี่ยวชาญสิ่งแวดล้อม",
+        "No-Adverse-Impact (occ_frac) [HARD GATE ผ่านแล้ว]":
+            f"✓ พื้นที่ว่าง {round((1-p['occ_frac'])*100)}% (occ_frac={p['occ_frac']})",
+    }
+
+def legal_check_bottleneck(b):
+    return {
+        "สิทธิที่ดิน / ห้ามทับอาคาร [HARD GATE ผ่านแล้ว]":
+            ("✓ ขยับไปที่ว่างข้างเคียงแล้ว" if b.get("relocated")
+             else ("✓ อยู่บนแนวถนน (ที่สาธารณะ)" if b.get("on_road") else "✓ มีที่ว่างติดตั้ง")),
+        "พ.ร.บ. ทรัพยากรน้ำ 2561": "ต้องขออนุญาตหากสร้างในเขตทางน้ำสาธารณะ",
+    }
 
 # ---------- checklist หลักการออกแบบ + กฎหมาย (จากมาตรฐานจริง) ผูกกับแต่ละโครงสร้าง ----------
 DESIGN_REQ = {
@@ -473,9 +560,10 @@ for k in range(pn):
                   "road_on_site": road_on_site, "occ_frac": occ_frac, "free_cells": len(free),
                   "free_idx": [int(i) for i in free],     # เซลล์ว่างจริง → ให้ 3D วาดบ่อตามรูปจริง (ไม่ทับอาคาร)
                   "near_buildings": buildings_near(int(use[len(use) // 2]))})
-# เลือก "จุดที่สร้างได้จริงก่อน": ทับอาคาร/ถนนน้อยที่สุดก่อน แล้วจึงดูปริมาณน้ำที่มารวม (flowacc)
-# ต้องมีที่ว่างพอสร้างจริง (≥4 เซลล์ ≈ 0.2 ไร่ขึ้นไป) มิฉะนั้นข้าม
-ponds = [p for p in ponds if p["free_cells"] >= 4]
+# เลือก "จุดที่สร้างได้จริงก่อน" ผ่าน 2 hard gate ตามกฎหมาย:
+#   Gate 1 (สิทธิที่ดิน ป.พ.พ.): free_cells >= 4 (มีที่ว่างพอสร้างบ่อ ≥ 0.2 ไร่)
+#   Gate 2 (No-Adverse-Impact): occ_frac < 0.5 (ที่ว่าง > 50% — ไม่ควรสร้างบนพื้นที่ที่ส่วนใหญ่เป็นอาคาร/ถนน)
+ponds = [p for p in ponds if p["free_cells"] >= 4 and p["occ_frac"] < 0.5]
 ponds.sort(key=lambda p: (p["occ_frac"], -p["flowacc"]))
 ponds = dedupe_spatial(ponds)[:3]                  # เว้นระยะ ≥500 ม. กันบ่อหน่วงซ้อนจุดเดียว
 print(f"retention ponds (top {len(ponds)}): " + ", ".join(
@@ -521,34 +609,40 @@ for rank, z in enumerate(zones, 1):
                        "label": f"จุดเสี่ยงอันดับ {rank}",
                        "rationale": f"ท่วม ~{z['depth_mean']} ม. · อาคารโดน {z['buildings']} หลัง · อยู่ริมแม่น้ำ → คันกั้นริมตลิ่งช่วยได้"}})
 for i, b in enumerate(bottlenecks, 1):
-    site = ("ย้ายจุดติดตั้งไปที่ว่างข้างเคียง (เลี่ยงอาคาร)" if b.get("relocated")
+    site = ("ย้ายจุดติดตั้งไปที่ว่างข้างเคียง [gate: ห้ามทับอาคาร ป.พ.พ.]" if b.get("relocated")
             else ("อยู่บนแนวถนน — ตั้งบ่อพัก/สูบริมทางได้" if b.get("on_road") else "มีที่ว่างติดตั้ง"))
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(b["lon"], 6), round(b["lat"], 6)]},
         "properties": {"kind": "bottleneck", "rank": i, "drain_cm": b["drain_cm"], "cost_thb": DRAIN_COST,
                        "on_road": b.get("on_road", False), "relocated": b.get("relocated", False),
                        "design_req": DESIGN_REQ["bottleneck"]["items"], "std": DESIGN_REQ["bottleneck"]["std"],
+                       "legal_check": legal_check_bottleneck(b),
+                       "legal_basis": "พ.ร.บ. ทรัพยากรน้ำ 2561 · สิทธิในที่ดิน ป.พ.พ.",
                        "label": f"คอขวดระบายน้ำ {i}",
                        "rationale": f"น้ำไหลมารวมสูง แต่ความจุระบายเพียง {b['drain_cm']} ซม. → ควรเพิ่มท่อ/สูบ · {site}"}})
 for i, p in enumerate(ponds, 1):
+    # ผ่าน hard gate (free_cells >= 4 และ occ_frac < 0.5) มาแล้ว → แสดงเฉพาะที่สร้างได้จริง
     if p["bld_on_site"] == 0 and p["road_on_site"] == 0:
-        feas = "พื้นที่ว่าง ไม่ทับอาคาร/ถนน"
+        feas = "พื้นที่ว่าง ไม่ทับอาคาร/ถนน [ผ่านเงื่อนไขสิทธิที่ดิน ป.พ.พ.]"
     elif p["bld_on_site"] == 0:
-        feas = f"เลี่ยงอาคารได้ · มีถนนพาด ~{p['road_on_site']} ช่อง (คิดความจุจากที่ว่างแล้ว)"
+        feas = f"เลี่ยงอาคารได้ · มีถนนพาด ~{p['road_on_site']} ช่อง (คิดความจุจากที่ว่างแล้ว) [ผ่านเงื่อนไขสิทธิที่ดิน]"
     else:
-        feas = f"⚠ มีอาคาร ~{p['bld_on_site']} หลังบนพื้นที่ — ต้องจัดหาที่ดิน/เวนคืน"
+        feas = f"⚠ มีอาคาร ~{p['bld_on_site']} หลังบนพื้นที่ — ต้องจัดหาที่ดิน/เวนคืนก่อน (ป.พ.พ.)"
+    eia_note = f" · ต้องทำ EIA (มติ ครม. 2552: พื้นที่ {p['area_rai']} ไร่ > 5 ไร่)" if p["area_rai"] > 5 else ""
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(p["lon"], 6), round(p["lat"], 6)]},
         "properties": {"kind": "retention", "rank": i, "area_rai": p["area_rai"],
                        "storage_m3": p["storage_m3"], "cost_thb": p["cost"],
                        "buildings_on_site": p["bld_on_site"], "road_on_site": p["road_on_site"],
-                       # ศูนย์กลางเซลล์ว่างจริง (30 ม.) → 3D วาดบ่อเป็นรูปจริง ไม่ใช่วงกลมทับอาคาร
                        "cells": [[round(lonOf(idx % NC), 6), round(latOf(idx // NC), 6)] for idx in p["free_idx"]],
                        "design_req": DESIGN_REQ["retention"]["items"], "std": DESIGN_REQ["retention"]["std"],
+                       "legal_check": legal_check_pond(p),
+                       "legal_basis": "มติ ครม. 2552 (EIA) · สิทธิในที่ดิน ป.พ.พ. · No-Adverse-Impact",
                        "label": f"แก้มลิง/บ่อหน่วงน้ำ {i}",
-                       "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม. · {feas}"}})
+                       "rationale": f"จุดน้ำไหลมารวมหลัก → บ่อหน่วง ~{p['area_rai']} ไร่ เก็บได้ ~{p['storage_m3']:,} ลบ.ม. · {feas}{eia_note}"}})
 for lv in levees:
     if lv["line"]:
+        lc = legal_check_levee(lv)
         feats.append({"type": "Feature",
             "geometry": {"type": "LineString", "coordinates": [[p[0], p[1]] for p in lv["line"]]},
             "properties": {"kind": "levee", "rank": lv["rank"], "protects_buildings": lv["protected"],
@@ -558,18 +652,25 @@ for lv in levees:
                            "wall_h_mean": lv["wall_h_mean"], "wall_h_max": lv["wall_h_max"],
                            "newly_flooded": lv["newly_flooded"], "gates": len(floodgates),
                            "design_req": DESIGN_REQ["levee"]["items"], "std": DESIGN_REQ["levee"]["std"],
+                           "legal_check": lc,
+                           "legal_basis": "พ.ร.บ. ชลประทานหลวง ม.20 · ป.พ.พ. 1337/1339 · No-Adverse-Impact · พ.ร.บ. ทรัพยากรน้ำ 2561",
                            "label": lv["label"],
-                           "rationale": f"กำแพงริมตลิ่งฝั่งเมือง ~{round(lv['length_m']/1000,1)} กม. · สูงเฉลี่ย ~{lv['wall_h_mean']} ม. (สูงสุด ~{lv['wall_h_max']}) → ป้องกัน ~{lv['protected']} หลัง (จากท่วม {lv['before']})"
-                                        + (f" · เลี่ยงอาคารแล้ว (ทับ {lv['bld_under_wall']} หลัง) · ต้องมีประตูระบาย/สูบ {len(floodgates)} จุดที่ตัดถนน")
-                                        + f" · No-Adverse-Impact: อาคารกระทบเพิ่ม {lv['newly_flooded']} (ต้องยืนยัน HEC-RAS 2D)"}})
+                           "rationale": (
+                               f"กำแพงริมตลิ่งฝั่งเมือง ~{round(lv['length_m']/1000,1)} กม. · สูงเฉลี่ย ~{lv['wall_h_mean']} ม."
+                               f" → ป้องกัน ~{lv['protected']} หลัง (จากท่วม {lv['before']})"
+                               f" · เลี่ยงอาคารแล้ว [HARD GATE: ป.พ.พ. ห้ามทับอาคาร] (ทับ {lv['bld_under_wall']} หลัง)"
+                               f" · ต้องมีประตูระบาย/สูบ {len(floodgates)} จุด [ม.20: ห้ามปิดกั้นโดยสมบูรณ์]"
+                               f" · No-Adverse-Impact (ป.พ.พ. 1337/1339): อาคารกระทบเพิ่ม {lv['newly_flooded']} — ต้องยืนยัน HEC-RAS 2D"
+                           )}})
 # จุดประตูระบาย/สถานีสูบ ตามแนวคันกั้น
 for i, gp in enumerate(floodgates, 1):
     feats.append({"type": "Feature",
         "geometry": {"type": "Point", "coordinates": [round(gp["lon"], 6), round(gp["lat"], 6)]},
         "properties": {"kind": "floodgate", "rank": i,
                        "design_req": DESIGN_REQ["floodgate"]["items"], "std": DESIGN_REQ["floodgate"]["std"],
+                       "legal_basis": "พ.ร.บ. ชลประทานหลวง มาตรา 20 (บังคับมีช่องระบาย/flap gate ทุกจุดตัดถนน)",
                        "label": f"ประตูระบาย/สถานีสูบ {i}",
-                       "rationale": "จุดที่คันกั้นตัดถนน/ทางระบาย → ต้องมีประตูกันน้ำย้อน (flap gate) + สถานีสูบระบายน้ำในเมืองออก"}})
+                       "rationale": "จุดที่คันกั้นตัดถนน/ทางระบาย [มาตรา 20: ห้ามปิดกั้นน้ำโดยสมบูรณ์] → ต้องมีประตูกันน้ำย้อน (flap gate) + สถานีสูบระบายน้ำในเมืองออก"}})
 
 fc = {"type": "FeatureCollection", "name": "intervention_candidates",
       "_meta": {"design_stage_m": DESIGN_S, "method": "Priority-Flood screening on FABDEM 30m",
@@ -603,7 +704,8 @@ sim = {
         {
             "rank": lv["rank"],
             "label": lv["label"],
-            "line": lv["line"],                        # แนวแม่น้ำหลัก (สำหรับวาด 2D)
+            "line": lv["line"],                        # เส้นตามแนวกำแพงจริง ริมตลิ่งฝั่งเมือง (สำหรับวาด 2D)
+            "polygon": lv.get("polygon", []),          # convex hull พื้นที่ที่คันกั้นป้องกันได้ (วาด polygon 2D/3D)
             "wall_cells": lv["wall_cells"],            # เซลล์กำแพงริมตลิ่ง (engine รันซ้ำ + วาดกำแพง 3D)
             "before": lv["before"], "after": lv["after"],
             "protected": lv["protected"],

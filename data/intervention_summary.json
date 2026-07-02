@@ -1,14 +1,14 @@
 {
   "design_stage_m": 18.25,
-  "baseline_buildings_flooded": 3905,
-  "baseline_flood_cells": 11504,
+  "baseline_buildings_flooded": 3762,
+  "baseline_flood_cells": 9951,
   "levee_demo": {
-    "protects_buildings": 96,
-    "before": 3905,
-    "after": 3809,
+    "protects_buildings": 3758,
+    "before": 3762,
+    "after": 4,
     "needs_pump": true,
-    "cost_thb": 293000000,
-    "length_m": 9600
+    "cost_thb": 661100000,
+    "length_m": 21870
   },
   "cost_note": "ต้นทุนเป็นค่าสมมุติคร่าว ๆ (คันกั้น 30,000 ฿/ม. · สูบ 5 ล้าน฿ · ท่อ 2 ล้าน฿ · บ่อหน่วง 1,200 ฿/ลบ.ม.) คันกั้นริมแม่น้ำต้องมีประตูระบาย/สถานีสูบที่ปากท่อระบายออกแม่น้ำ · ใช้จัดลำดับ benefit/cost เท่านั้น ไม่ใช่ราคาจริง · แก้มลิง/คอขวด: ตัวเลขข้างจุดเป็นบริบท (อาคารใกล้/ความจุ) ยังไม่ใช่ผลลดน้ำท่วมจากแบบจำลอง",
   "recommendations": [
@@ -16,12 +16,12 @@
       "type": "คันกั้นริมแม่น้ำ (levee)",
       "kind": "levee",
       "where": "ริมแม่น้ำปัตตานี ฝั่งเมือง",
-      "measure": "กำแพงริมตลิ่ง ~9.6 กม. สูงเฉลี่ย ~0.3 ม. + ประตูระบาย/สถานีสูบ",
-      "protects_buildings": 96,
-      "cost_thb": 293000000,
-      "benefit_per_million": 0.33,
+      "measure": "กำแพงริมตลิ่ง ~21.9 กม. สูงเฉลี่ย ~1.8 ม. + ประตูระบาย/สถานีสูบ",
+      "protects_buildings": 3758,
+      "cost_thb": 661100000,
+      "benefit_per_million": 5.68,
       "newly_flooded": 0,
-      "gates": 11,
+      "gates": 23,
       "design_req": [
         "ผนังกันซึม (cutoff wall) + วิเคราะห์ under-seepage ใต้ฐาน",
         "ต่อปลายแนวเข้าที่สูง กันน้ำอ้อม (flanking)",
@@ -30,7 +30,7 @@
         "no-rise/EIA: พิสูจน์ไม่ยกระดับน้ำฝั่งตรงข้าม/ท้ายน้ำ (HEC-RAS 2D)"
       ],
       "std": "USACE ULDC / EM 1110-2-2300",
-      "expected": "ป้องกันอาคารได้ ~96 หลัง (จากที่ท่วม 3905) · เลี่ยงรอยอาคาร (ทับ 0 หลัง) · ประตู/สูบ 11 จุด · กระทบเพิ่ม 0",
+      "expected": "ป้องกันอาคารได้ ~3758 หลัง (จากที่ท่วม 3762) · เลี่ยงรอยอาคาร (ทับ 55 หลัง) · ประตู/สูบ 23 จุด · กระทบเพิ่ม 0",
       "priority": 1
     },
     {
@@ -144,19 +144,6 @@
     {
       "type": "พื้นที่เสี่ยง (hotspot)",
       "kind": "hotspot",
-      "where": "6.563, 101.301",
-      "buildings": 207,
-      "depth_mean_m": 3.75,
-      "measure": "จุดเสี่ยงน้ำท่วม (อ้างอิงเลือกแนวคันกั้น/มาตรการ)",
-      "protects_buildings": null,
-      "cost_thb": null,
-      "benefit_per_million": null,
-      "expected": "ท่วม ~3.75 ม. · อาคาร 207 หลัง",
-      "priority": 10
-    },
-    {
-      "type": "พื้นที่เสี่ยง (hotspot)",
-      "kind": "hotspot",
       "where": "6.567, 101.288",
       "buildings": 10,
       "depth_mean_m": 4.01,
@@ -165,7 +152,7 @@
       "cost_thb": null,
       "benefit_per_million": null,
       "expected": "ท่วม ~4.01 ม. · อาคาร 10 หลัง",
-      "priority": 11
+      "priority": 10
     },
     {
       "type": "พื้นที่เสี่ยง (hotspot)",
@@ -178,7 +165,7 @@
       "cost_thb": null,
       "benefit_per_million": null,
       "expected": "ท่วม ~3.98 ม. · อาคาร 8 หลัง",
-      "priority": 12
+      "priority": 11
     }
   ],
   "method_note": "ระดับ screening บน Priority-Flood (DEM FABDEM 30 ม., ±5 ม.) — ใช้เลือกจุด/เทียบมาตรการ ไม่ใช่ออกแบบขนาดจริง (ต้อง HEC-RAS 2D + SWMM + LiDAR)",
@@ -220,5 +207,5 @@
       ]
     }
   },
-  "generated": "2026-07-01"
+  "generated": "2026-07-02"
 }

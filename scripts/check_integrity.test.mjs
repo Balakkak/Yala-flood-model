@@ -20,7 +20,7 @@ const exists = (p) => fs.existsSync(path.join(ROOT, p));
 
 const PAGES = ["index.html", "dashboard.html", "city3d.html", "interventions.html"];
 const SCRIPTS = ["assets/flood_analysis.js", "assets/live_status.js", "assets/lisflood_viewer.js",
-  "assets/flood_engine.js", "assets/auth.js"];
+  "assets/auth.js"];
 
 // รวบรวม path ภายในที่ถูกอ้างถึง (ข้าม http, template {z}/{x}, และ data-URI)
 function referencedPaths() {

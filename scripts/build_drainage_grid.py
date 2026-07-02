@@ -17,7 +17,7 @@ from skimage.draw import polygon as sk_polygon
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 D = os.path.join(ROOT, "data")
-G = json.load(open(os.path.join(D, "dem_grid.json")))
+G = json.load(open(os.path.join(D, "dem_grid.json"), encoding="utf-8"))
 NC, NR = G["ncols"], G["nrows"]; N = NC * NR
 olon, olat, dlon, dlat = G["origin_lon"], G["origin_lat"], G["dlon"], G["dlat"]
 CELL_M = dlat * 111000.0  # ~30.8 ม./เซลล์
@@ -33,8 +33,10 @@ def rings(geom):
 
 # ---------- 1) channel mask จากทางน้ำจริง ----------
 channel = np.zeros((NR, NC), bool)
-ww = json.load(open(os.path.join(D, "yala_waterways_kmz.geojson")))
+ww = json.load(open(os.path.join(D, "yala_waterways_kmz.geojson"), encoding="utf-8"))
 for f in ww["features"]:
+    if f.get("properties", {}).get("name") != "แม่น้ำปัตตานี":
+        continue
     for ring in rings(f.get("geometry") or {}):
         if len(ring) < 3: continue
         lon = np.array([p[0] for p in ring]); lat = np.array([p[1] for p in ring])
@@ -46,7 +48,7 @@ n_ch = int(channel.sum())
 # ---------- 2) drain capacity จาก ฝาท่อ + สถานีสูบ ----------
 # (ก) ความหนาแน่นฝาท่อ → ระบายผิวดิน
 mh_count = np.zeros((NR, NC), float)
-mh = json.load(open(os.path.join(D, "yala_drainage_manholes.geojson")))
+mh = json.load(open(os.path.join(D, "yala_drainage_manholes.geojson"), encoding="utf-8"))
 for f in mh["features"]:
     lon, lat = f["geometry"]["coordinates"][:2]
     r, c = rc(lon, lat); r, c = int(round(r)), int(round(c))
@@ -61,7 +63,7 @@ manhole_drain = np.minimum(0.25, 0.035 * dens)   # ม. (สูงสุด 0.25
 # (ข) สถานีสูบ → ระบายเชิงรุกในรัศมีรอบสถานี
 pump_drain = np.zeros((NR, NC), float)
 R_M = 350.0; R_CELL = R_M / CELL_M
-pp = json.load(open(os.path.join(D, "yala_pump_stations.geojson")))
+pp = json.load(open(os.path.join(D, "yala_pump_stations.geojson"), encoding="utf-8"))
 rad = int(np.ceil(R_CELL))
 for f in pp["features"]:
     lon, lat = f["geometry"]["coordinates"][:2]
@@ -89,7 +91,7 @@ G["drainage_meta"] = {
     "drain_mean_cm": round(float(drain_cm.mean()), 1),
     "note": "channel=ทางน้ำจริง(seed) · drain_cm=ความจุระบาย(สูบ+ฝาท่อ) หักความลึก → ท่วมตื้น/ลดก่อน",
 }
-json.dump(G, open(os.path.join(D, "dem_grid.json"), "w"), separators=(",", ":"))
+json.dump(G, open(os.path.join(D, "dem_grid.json"), "w", encoding="utf-8"), separators=(",", ":"))
 
 print(f"กริด {NC}x{NR} · เซลล์ {N:,}")
 print(f"  channel (ทางน้ำจริง) : {n_ch:,} เซลล์  ({100*n_ch/N:.1f}%)")
