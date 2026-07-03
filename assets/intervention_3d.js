@@ -122,10 +122,11 @@ window.IV3D = (function () {
       gl.uniform1f(uFeatherOn, featherOn);
       gl.bindVertexArray(vao);
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-      gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false);
-      gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-1.0, -1.0);
+      /* ห้ามใช้ depth test: depth ของ terrain mesh ขัดกับผิวน้ำ (คลาดจาก DEM + LOD สลับตอนกล้องเคลื่อน)
+         ทำให้น้ำโดนบังเป็นริ้ว/กระพริบ — เกิดแม้กล้องนิ่งในบางมุม · น้ำโปร่งแสงวาดท้ายสุด blend ทับตรง ๆ */
+      gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
       gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_INT, 0);
-      gl.disable(gl.POLYGON_OFFSET_FILL); gl.depthMask(true); gl.bindVertexArray(null);
+      gl.depthMask(true); gl.bindVertexArray(null);
       map.triggerRepaint();
     }
   };

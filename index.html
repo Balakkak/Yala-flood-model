@@ -493,7 +493,7 @@ async function buildScene() {
       float p1=dot(g,d1)+u_time*0.72;float p2=dot(g,d2)*1.5+u_time*0.50;float p3=dot(g,d3)*2.2+u_time*0.92;
       float w=0.038*sin(p1)+0.022*sin(p2)+0.012*sin(p3);
       vec2 gr=0.038*cos(p1)*d1+0.022*cos(p2)*d2*1.5+0.012*cos(p3)*d3*2.2;
-      float surf=max(depth+w*amp,0.02);      /* ผิวน้ำไม่ต่ำกว่าพื้น → ไม่ z-fight */
+      float surf=max(depth+w*amp,0.02);      /* ผิวน้ำไม่ต่ำกว่าพื้น */
       v_n=normalize(vec3(-gr*amp,1.0));v_depth=depth;v_uv=a_uv;
       float z=(a_ground+surf)*u_m2;gl_Position=u_matrix*vec4(a_pos,z,1.0);}`;
     const FS=`precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_edge;uniform float u_time;
@@ -550,10 +550,11 @@ async function buildScene() {
         gl.uniformMatrix4fv(uMat,false,mtx); gl.uniform1f(uTime,(now-t0)/1000); gl.uniform1f(uM2,M2); gl.uniform1f(uStage,stage);
         gl.bindVertexArray(vao);
         gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
-        gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false);
-        gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-1.0,-1.0);  // ดึงน้ำมาหน้าเล็กน้อย กัน z-fight
+        /* ห้ามใช้ depth test: depth ของ terrain mesh ขัดกับผิวน้ำ (คลาดจาก DEM + LOD สลับตอนกล้องเคลื่อน)
+           ทำให้น้ำโดนบังเป็นริ้ว/กระพริบ — พิสูจน์แล้วว่าเกิดแม้กล้องนิ่งในบางมุม
+           น้ำโปร่งแสงถูกวาดท้ายสุดอยู่แล้ว การ blend ทับตรง ๆ ให้ภาพนิ่งสนิททุกมุมกล้อง */
+        gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
         gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_INT, 0);
-        gl.disable(gl.POLYGON_OFFSET_FILL);
         gl.depthMask(true); gl.bindVertexArray(null);
         if(now-lastStat>140){ lastStat=now; updateStats(); }
         if(visible) map.triggerRepaint();   // ผิวน้ำเคลื่อนไหว/ไต่ระดับต่อเนื่อง
