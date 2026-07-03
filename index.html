@@ -38,8 +38,12 @@
     .lg-scale { display:flex; justify-content:space-between; font-size:10px; color:#64748b; }
     /* แผงควบคุม 3D — สไตล์การ์ดเหมือนแผงขวาของหน้า 2D */
     .ctrl { bottom:16px; right:16px; width:344px; padding:0;
-      background:#fff; backdrop-filter:none; max-height:calc(100% - 32px); overflow-y:auto;
+      background:#fff; backdrop-filter:none;
+      max-height:calc(100% - 64px); /* เว้นหัวแผงให้พ้นปุ่ม 2D/3D มุมขวาบน — กันปุ่มปิด ✕ ถูกทับ */
+      overflow-y:auto;
       transition:opacity .25s ease, transform .25s ease; }
+    /* ปุ่มซูม/เข็มทิศ + โลโก้ MapLibre (มุมขวาล่าง) — ยกขึ้นพ้นปุ่ม CTA "จำลองสถานการณ์น้ำท่วม" */
+    .maplibregl-ctrl-bottom-right { margin-bottom:64px; }
     .ctrl.is-hidden { opacity:0; transform:translateY(10px) scale(.98); pointer-events:none; }
     .ctrl .card-head { position:relative; padding-right:40px; }
     .panel-close { position:absolute; top:9px; right:10px; width:28px; height:28px;
