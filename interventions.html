@@ -87,6 +87,15 @@
       background:#ecfdf5; border:1px solid #a7f3d0; font-size:10.5px; color:#065f46; line-height:1.55; }
     .struct-tog .impact-line b { color:#047857; }
     .struct-tog .impact-line .ti { font-size:12px; vertical-align:-2px; }
+    /* หลอดผลรวมการลดน้ำท่วมของมาตรการทั้งหมดที่เปิด (การ์ดใต้ "วิธีวิเคราะห์") */
+    .tot-row { display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
+    .tot-pct { font:800 22px 'Inter','Sarabun',sans-serif; color:#047857; }
+    .tot-cap { font-size:11px; color:var(--ink-600); }
+    .tot-bar { height:14px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
+    .tot-fill { height:100%; width:0; border-radius:999px; min-width:0;
+      background:linear-gradient(90deg,#38bdf8,#10b981); transition:width .35s ease; }
+    .tot-detail { margin-top:7px; font-size:11px; color:var(--ink-600); line-height:1.5; }
+    .tot-detail b { color:#047857; }
     .cmp-stats { display:grid; grid-template-columns:1fr; gap:7px; margin-top:4px; }
     .cmp-stat { border:1px solid var(--line); border-radius:9px; padding:7px 10px; }
     .cmp-stat .lab { font-size:10.5px; color:var(--ink-500); display:flex; align-items:center; gap:5px; }
@@ -196,6 +205,16 @@
             <li>จับคู่ <b>มาตรการโครงสร้าง</b> (คันกั้น / สูบ / ท่อระบาย / แก้มลิง / คลองระบายน้ำเส้นใหม่)</li>
             <li><b>จำลองก่อน-หลัง</b> — รันโมเดลซ้ำ วัดอาคารที่ป้องกันได้</li>
           </ol>
+        </div>
+      </section>
+
+      <!-- หลอดผลรวม: ติ๊กมาตรการแล้วเห็นทันทีว่ารวมกันลดน้ำท่วมไปกี่ % -->
+      <section class="card" style="margin-top:14px;">
+        <div class="card-head"><i class="ti ti-chart-bar"></i><h2>ผลรวมมาตรการที่เปิด</h2><span class="sub" id="totCount">0 มาตรการ</span></div>
+        <div class="card-body">
+          <div class="tot-row"><span class="tot-pct" id="totPct">0%</span><span class="tot-cap">ของปริมาตรน้ำท่วมที่ลดได้</span></div>
+          <div class="tot-bar"><div class="tot-fill" id="totFill"></div></div>
+          <div class="tot-detail" id="totDetail">ยังไม่เปิดมาตรการ — ติ๊กมาตรการด้านล่างเพื่อดูผลรวม</div>
         </div>
       </section>
 
