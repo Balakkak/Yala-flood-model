@@ -296,6 +296,7 @@
 <!-- unpkg ล่ม/โหลดพลาด → สลับไป jsdelivr (ไฟล์ npm เดียวกัน SRI เดิม) — กันหน้าขาวทั้งจอ -->
 <script>window.L||document.write('<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"><\/script>')</script>
 <script>window.maplibregl||document.write('<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js" integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"><\/script>')</script>
+<script src="assets/leaflet_smooth_zoom.js"></script>
 <script src="assets/intervention_compare.js"></script>
 <script src="assets/intervention_views.js"></script>
 <script src="assets/intervention_3d.js"></script>
@@ -324,7 +325,9 @@
   (function(){ var el=document.getElementById('clock'); function t(){ var d=new Date(),p=n=>String(n).padStart(2,'0'); el.textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); } t(); setInterval(t,1000); })();
   if (window.YalaLive) YalaLive.fetchLive();
 
-  var map = L.map('map', { zoomControl:true }).setView([6.54, 101.28], 13);
+  // zoomSnap:0 + smoothWheelZoom = ซูมต่อเนื่องไหลลื่นแบบ 3D (handler ใน leaflet_smooth_zoom.js)
+  var map = L.map('map', { zoomControl:true, zoomSnap:0, scrollWheelZoom:false, smoothWheelZoom:true })
+    .setView([6.54, 101.28], 13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
 
   // LayerGroup แยกตามประเภท — ซ่อนทุกอย่างโดยปริยาย
