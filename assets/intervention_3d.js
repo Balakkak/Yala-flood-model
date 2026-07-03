@@ -266,13 +266,6 @@ window.IV3D = (function () {
                "fill-extrusion-height": ["case", ["==", ["get", "on"], 1], 4.8, 1.7],
                "fill-extrusion-base": ["case", ["==", ["get", "on"], 1], 4.5, 1.5],
                "fill-extrusion-vertical-gradient": false } });
-    // เส้นประขอบเขตเทศบาล — เส้นอ้างอิงภูมิศาสตร์ให้ตรงกับ 2D (สถิตินับน้ำท่วมทั้งพื้นที่ ไม่จำกัดเขต)
-    fetch("data/yala_boundary.geojson?t=" + Date.now()).then(function (r) { return r.json(); }).then(function (b) {
-      if (map.getSource("iv-boundary")) return;
-      map.addSource("iv-boundary", { type: "geojson", data: b });
-      map.addLayer({ id: "iv-boundary-line", type: "line", source: "iv-boundary",
-        paint: { "line-color": "#0c3b6e", "line-width": 2.5, "line-opacity": 0.9, "line-dasharray": [2.5, 2] } });
-    }).catch(function () {});
     buildCanals3D();
     buildCandidateMarkers();
     buildArrays();
