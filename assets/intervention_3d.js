@@ -12,12 +12,13 @@ window.IV3D = (function () {
   var map = null, built = false, gl = null, meta;
   var positions, uvs, grounds, arrB, arrA, flowArr, indices, M2, N, NC, NR;
   var htmlMarkers = {};
-  var prog, vao, posB, uvB, gndB, arrBB, arrAB, flowB, drnB, idxB;
-  var aPos, aUv, aGnd, aArrB, aArrA, aFlow, aDrn, uMat, uTime, uM2, uStage, uSplit, uFlowOn;
+  var prog, vao, posB, uvB, gndB, arrBB, arrAB, flowB, drnB, fthB, idxB;
+  var aPos, aUv, aGnd, aArrB, aArrA, aFlow, aDrn, aFth, uMat, uTime, uM2, uStage, uSplit, uFlowOn, uFeatherOn;
   var t0 = performance.now();
   var stageCur = 18.25, stageTarget = 18.25, uSplitX = 0, flowOn = 1.0;
+  var featherOn = 0.0;             // เปิดคันกั้น → เกลี่ยน้ำฉากหลังนอกเขตให้จางเข้าหาเมือง (กันหน้าผาน้ำตรงเส้นเขต)
   var afterBufferDirty = false;
-  var drains, drainArr;
+  var drains, drainArr, featherArr;
 
   function mercXOf(lng) { return maplibregl.MercatorCoordinate.fromLngLat({ lng: lng, lat: 6.547 }, 0).x; }
 
@@ -29,7 +30,8 @@ window.IV3D = (function () {
     M2 = maplibregl.MercatorCoordinate.fromLngLat({ lng: 101.285, lat: 6.547 }, 0).meterInMercatorCoordinateUnits();
     positions = new Float32Array(N * 2); uvs = new Float32Array(N * 2);
     grounds = new Float32Array(N); arrB = new Float32Array(N); arrA = new Float32Array(N); flowArr = new Float32Array(N * 2);
-    drainArr = new Float32Array(N);
+    drainArr = new Float32Array(N); featherArr = new Float32Array(N);
+    var cf = IVCompare.ctxFeather ? IVCompare.ctxFeather() : null;
     for (var r = 0; r < NR; r++) for (var c = 0; c < NC; c++) {
       var i = r * NC + c, lng = meta.OLON + (c + 0.5) * meta.DLON, lat = meta.OLAT - (r + 0.5) * meta.DLAT;
       var p = maplibregl.MercatorCoordinate.fromLngLat({ lng: lng, lat: lat }, 0);
@@ -40,6 +42,7 @@ window.IV3D = (function () {
       arrA[i] = isFinite(A.after[i]) ? A.after[i] : ctxV;
       flowArr[i * 2] = ff.fx[i]; flowArr[i * 2 + 1] = ff.fy[i];      // ทิศไหลใน uv-space (u=ตอ., v=ใต้)
       drainArr[i] = drains[i];
+      featherArr[i] = cf ? cf[i] : 1;
     }
     var idx = [];
     for (var rr = 0; rr < NR - 1; rr++) for (var cc = 0; cc < NC - 1; cc++) {
@@ -48,11 +51,13 @@ window.IV3D = (function () {
     indices = new Uint32Array(idx);
   }
 
-  var VS = "attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;attribute float a_arrB;attribute float a_arrA;attribute vec2 a_flow;attribute float a_drain;" +
-    "uniform mat4 u_matrix;uniform float u_time;uniform float u_m2;uniform float u_stage;uniform float u_split;uniform float u_flowOn;" +
+  var VS = "attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;attribute float a_arrB;attribute float a_arrA;attribute vec2 a_flow;attribute float a_drain;attribute float a_feather;" +
+    "uniform mat4 u_matrix;uniform float u_time;uniform float u_m2;uniform float u_stage;uniform float u_split;uniform float u_flowOn;uniform float u_featherOn;" +
     "varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_flow;void main(){" +
     "float arr=(a_pos.x < u_split)?a_arrB:a_arrA;" +              /* ซ้าย=ก่อน, ขวา=หลัง */
     "float depth=(arr<=u_stage)?max(0.0,u_stage-a_ground-a_drain):0.0;" +
+    "depth*=mix(1.0,a_feather,u_featherOn);" +                    /* เปิดคันกั้น → น้ำฉากหลังตื้นลงเข้าหาเมือง (ไม่เป็นหน้าผา) */
+    "depth*=smoothstep(0.0,0.08,min(min(a_uv.x,1.0-a_uv.x),min(a_uv.y,1.0-a_uv.y)));" + /* จางเข้าหาขอบกริด DEM (นุ่ม ~8% ของกริด) — กันผืนน้ำถูกตัดตรงขอบข้อมูล */
     "float amp=clamp(depth*2.0,0.0,1.0);vec2 g=a_uv*48.0;" +
     "vec2 d1=vec2(0.30,0.95),d2=vec2(0.82,0.28),d3=vec2(-0.55,0.70);" +
     "float p1=dot(g,d1)+u_time*0.72;float p2=dot(g,d2)*1.5+u_time*0.50;float p3=dot(g,d3)*2.2+u_time*0.92;" +
@@ -82,16 +87,17 @@ window.IV3D = (function () {
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) console.error("iv-water link:", gl.getProgramInfoLog(prog));
       aPos = gl.getAttribLocation(prog, "a_pos"); aUv = gl.getAttribLocation(prog, "a_uv");
       aGnd = gl.getAttribLocation(prog, "a_ground"); aArrB = gl.getAttribLocation(prog, "a_arrB"); aArrA = gl.getAttribLocation(prog, "a_arrA"); aFlow = gl.getAttribLocation(prog, "a_flow");
-      aDrn = gl.getAttribLocation(prog, "a_drain");
+      aDrn = gl.getAttribLocation(prog, "a_drain"); aFth = gl.getAttribLocation(prog, "a_feather");
       uMat = gl.getUniformLocation(prog, "u_matrix"); uTime = gl.getUniformLocation(prog, "u_time");
       uM2 = gl.getUniformLocation(prog, "u_m2"); uStage = gl.getUniformLocation(prog, "u_stage"); uSplit = gl.getUniformLocation(prog, "u_split"); uFlowOn = gl.getUniformLocation(prog, "u_flowOn");
+      uFeatherOn = gl.getUniformLocation(prog, "u_featherOn");
       var mk = function (data, type) { var b = gl.createBuffer(); gl.bindBuffer(type || gl.ARRAY_BUFFER, b); gl.bufferData(type || gl.ARRAY_BUFFER, data, type ? gl.STATIC_DRAW : gl.DYNAMIC_DRAW); return b; };
       posB = mk(positions); uvB = mk(uvs); gndB = mk(grounds);
-      arrBB = mk(arrB); arrAB = mk(arrA); flowB = mk(flowArr); drnB = mk(drainArr);
+      arrBB = mk(arrB); arrAB = mk(arrA); flowB = mk(flowArr); drnB = mk(drainArr); fthB = mk(featherArr);
       idxB = mk(indices, gl.ELEMENT_ARRAY_BUFFER);
       vao = gl.createVertexArray(); gl.bindVertexArray(vao);
       var bind = function (b, loc, size) { gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0); };
-      bind(posB, aPos, 2); bind(uvB, aUv, 2); bind(gndB, aGnd, 1); bind(arrBB, aArrB, 1); bind(arrAB, aArrA, 1); bind(flowB, aFlow, 2); bind(drnB, aDrn, 1);
+      bind(posB, aPos, 2); bind(uvB, aUv, 2); bind(gndB, aGnd, 1); bind(arrBB, aArrB, 1); bind(arrAB, aArrA, 1); bind(flowB, aFlow, 2); bind(drnB, aDrn, 1); bind(fthB, aFth, 1);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxB); gl.bindVertexArray(null);
     },
     render: function (glc, mtxArg) {
@@ -107,6 +113,7 @@ window.IV3D = (function () {
       gl.useProgram(prog);
       gl.uniformMatrix4fv(uMat, false, mtx); gl.uniform1f(uTime, (now - t0) / 1000); gl.uniform1f(uM2, M2);
       gl.uniform1f(uStage, stageCur); gl.uniform1f(uSplit, uSplitX); gl.uniform1f(uFlowOn, flowOn);
+      gl.uniform1f(uFeatherOn, featherOn);
       gl.bindVertexArray(vao);
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false);
@@ -117,12 +124,8 @@ window.IV3D = (function () {
     }
   };
 
-  function leveeGeoJSON() {       // hull = "โซนที่ป้องกันได้" (ศักยภาพ) — แสดงตลอด (ไม่ใช่ตัวกำแพง)
-    return { type: "FeatureCollection", features: IVCompare.levees().filter(function (l) { return l.polygon && l.polygon.length >= 3; }).map(function (l) {
-      var ring = l.polygon.map(function (p) { return [p[0], p[1]]; }); ring.push(ring[0]);
-      return { type: "Feature", geometry: { type: "Polygon", coordinates: [ring] }, properties: { on: IVCompare.isEnabled(l.rank) ? 1 : 0 } };
-    }) };
-  }
+  // (เดิมมี hull "โซนป้องกันได้" เส้นประสีฟ้าทับเมือง — เอาออก: ขอบเหลี่ยมของ hull ทำให้ดูเหมือน
+  //  น้ำถูกตัดด้วยโพลิกอน · กำแพงคันกั้น 3D ตามแนวจริง + เมืองที่แห้งลง สื่อผลป้องกันชัดกว่า)
 
   // กำแพงคันกั้น 3D = ยกแท่งตามเซลล์ wall_cells จริง — แสดง "แนวที่เสนอ" ตลอด (เตี้ย) · เปิดมาตรการ → ยกเป็นกำแพงเต็ม
   function leveeWallGeoJSON() {
@@ -241,10 +244,6 @@ window.IV3D = (function () {
       map.addLayer({ id: "iv-buildings-3d", type: "fill-extrusion", source: "iv-buildings",
         paint: { "fill-extrusion-color": HEIGHT_COLOR, "fill-extrusion-height": ["coalesce", ["get", "height"], 8], "fill-extrusion-base": 0, "fill-extrusion-opacity": 0.92, "fill-extrusion-vertical-gradient": true } });
     }).catch(function (e) { console.warn("3D buildings โหลดไม่ได้", e); });
-    // โซนที่ป้องกันได้ (hull) = ขอบเขตศักยภาพ — เส้นประบาง ไม่ใช่ตัวกำแพง
-    map.addSource("iv-levees", { type: "geojson", data: leveeGeoJSON() });
-    map.addLayer({ id: "iv-levees-fill", type: "fill", source: "iv-levees", layout: { visibility: "none" }, paint: { "fill-color": ["case", ["==", ["get", "on"], 1], "rgba(59,130,246,0.12)", "rgba(59,130,246,0.05)"] } });
-    map.addLayer({ id: "iv-levees-line", type: "line", source: "iv-levees", layout: { visibility: "none" }, paint: { "line-color": "#2563eb", "line-width": 1.5, "line-dasharray": [3, 2], "line-opacity": 0.7 } });
     // กำแพงคันกั้น 3D จริง = แท่งตามเซลล์ wall_cells · ปิด=แนวเสนอเตี้ยจาง · เปิด=กำแพงเต็มสีคอนกรีต
     // (opacity ฝัง alpha ใน color เพราะ fill-extrusion-opacity ไม่รองรับ data-driven)
     map.addSource("iv-levee-wall", { type: "geojson", data: leveeWallGeoJSON() });
@@ -266,6 +265,7 @@ window.IV3D = (function () {
     buildArrays();
     updateSplit();
     stageCur = stageTarget = IVCompare.getStage();
+    featherOn = (IVCompare.enabledCount && IVCompare.enabledCount() > 0) ? 1.0 : 0.0;
     map.addLayer(waterLayer);
   }
 
@@ -294,7 +294,7 @@ window.IV3D = (function () {
       drainArr[i] = drn[i];
     }
     afterBufferDirty = true;
-    if (map.getSource("iv-levees")) map.getSource("iv-levees").setData(leveeGeoJSON());
+    featherOn = (IVCompare.enabledCount && IVCompare.enabledCount() > 0) ? 1.0 : 0.0;   // เกลี่ยน้ำฉากหลังเมื่อเปิดคันกั้น
     if (map.getSource("iv-levee-wall")) map.getSource("iv-levee-wall").setData(leveeWallGeoJSON());   // วาดกำแพง 3D ตามมาตรการที่เปิด
     if (map) map.triggerRepaint();
   }
@@ -339,7 +339,7 @@ window.IV3D = (function () {
         htmlMarkers[kind].forEach(function (m) { if (visible) m.addTo(map); else m.remove(); });
       }
       var layerIds = {
-        levee: ["iv-levees-fill", "iv-levees-line", "iv-levee-wall-3d", "iv-levee-wall-cap-3d"],
+        levee: ["iv-levee-wall-3d", "iv-levee-wall-cap-3d"],
         bottleneck: ["iv-bott-3d"],
         retention: ["iv-pond-3d", "iv-pond-rim"],
         floodgate: []

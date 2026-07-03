@@ -17,6 +17,7 @@ window.IVCompare = (function () {
   var OLON, OLAT, DLON, DLAT, DESIGN_S, FREEBOARD, STAGE;
   var sim, levees = [], enabled = {}, FR = null;
   var baseArrival, afterArrival, ctxArrival, statsCache, flowCache = null;
+  var ctxFeather = null;           // 0→1 ตามระยะจากขอบเขตเมือง — เกลี่ยน้ำฉากหลังตรงรอยต่อตอนเปิดคันกั้น
   var split = 0.0;                 // 0 = ทั้งหมดเป็น "หลัง", 1 = ทั้งหมดเป็น "ก่อน"
   var listeners = [];
   var ready = false;
@@ -26,6 +27,9 @@ window.IVCompare = (function () {
   var retentionPonds = [], bottleneckList = [], floodgateList = [];
   var enabledRetention = {}, enabledBottleneck = {}, enabledFloodgate = {};
   var canalRoutes = [];            // แนวคลองระบายน้ำเส้นใหม่ (จากแอ่งแก้มลิง → แม่น้ำ)
+  // มาตรการเสริมที่ใช้โครงสร้างเดิมของเทศบาล (จำลองผ่านความจุระบาย)
+  var pumpCells = [], dredgeCells = [], dredgeKm = 0;
+  var enabledPumpUpgrade = false, enabledDredge = false, enabledCanal = false;
 
   function emit(kind) { listeners.forEach(function (f) { try { f(kind); } catch (e) { console.warn(e); } }); }
   var lonOf = function (c) { return OLON + (c + 0.5) * DLON; };
@@ -69,24 +73,39 @@ window.IVCompare = (function () {
     var d = currentDrain ? currentDrain[i] : (drainM ? drainM[i] : 0);
     return inStudy[i] && !chanMask[i] && arr[i] <= STAGE && (STAGE - arr[i] - d > 0.03);
   }
+  // จานวงกลมไล่ระดับ (ศูนย์กลางเต็ม peak → ขอบ 0) — "รัศมีบริการ" ของมาตรการเฉพาะจุด
+  // วงกลม+ไล่ระดับ (ไม่ใช่สี่เหลี่ยมค่าคงที่) → น้ำรอบมาตรการแห้ง/ตื้นลงแบบเป็นธรรมชาติ มองเห็นผลชัด
+  function addDrainDisk(d, r0, c0, rad, peak) {
+    for (var r = Math.max(0, r0 - rad); r <= Math.min(NR - 1, r0 + rad); r++)
+      for (var c = Math.max(0, c0 - rad); c <= Math.min(NC - 1, c0 + rad); c++) {
+        var dr = r - r0, dc = c - c0, dist = Math.sqrt(dr * dr + dc * dc);
+        if (dist > rad) continue;
+        d[r * NC + c] += peak * (1 - dist / (rad + 1));
+      }
+  }
   // ความจุระบายที่ใช้งานจริง = ค่า DEM (drainM) + ผลของมาตรการที่ "เปิด" อยู่เท่านั้น (รายจุด)
-  //   แก้มลิง: ยกความจุระบายที่เซลล์บ่อ (+2.5 ม.) + กระจายรอบศูนย์กลางรัศมี 4 เซลล์ (+0.6)
-  //   คอขวด (เพิ่มท่อ/สูบ): +1.0 ม. รัศมี 5 เซลล์
+  //   แก้มลิง: เซลล์บ่อ +2.5 ม. + รัศมีบริการ ~180 ม. (ไล่ระดับสูงสุด 1.2)
+  //   คอขวด (เพิ่มท่อ/สูบ): รัศมี ~150 ม. (ไล่ระดับสูงสุด 1.2)
+  //   อัปเกรดสถานีสูบเดิม / ขุดลอกคลองเดิม / คลองเส้นใหม่: ตามจุด/แนวจริง
   function getActiveDrain() {
     var d = new Float32Array(N);
     if (drainM) { for (var i = 0; i < N; i++) d[i] = drainM[i]; }
     retentionPonds.forEach(function (p) {
       if (!enabledRetention[p.cell]) return;
       for (var k = 0; k < p.cells.length; k++) { var idx = p.cells[k]; if (idx >= 0 && idx < N) d[idx] += 2.5; }
-      var rad = 4;
-      for (var r = Math.max(0, p.r - rad); r <= Math.min(NR - 1, p.r + rad); r++)
-        for (var c = Math.max(0, p.c - rad); c <= Math.min(NC - 1, p.c + rad); c++) d[r * NC + c] += 0.6;
+      addDrainDisk(d, p.r, p.c, 6, 1.2);
     });
     bottleneckList.forEach(function (b) {
       if (!enabledBottleneck[b.cell]) return;
-      var rad = 5;
-      for (var r = Math.max(0, b.r - rad); r <= Math.min(NR - 1, b.r + rad); r++)
-        for (var c = Math.max(0, b.c - rad); c <= Math.min(NC - 1, b.c + rad); c++) d[r * NC + c] += 1.0;
+      addDrainDisk(d, b.r, b.c, 5, 1.2);
+    });
+    // สถานีสูบรับน้ำจากโครงข่ายท่อทั้งย่าน → รัศมีบริการ ~240 ม. (8 เซลล์) ต่อสถานี
+    if (enabledPumpUpgrade) pumpCells.forEach(function (p) { addDrainDisk(d, p.r, p.c, 8, 1.0); });
+    if (enabledDredge) for (var k2 = 0; k2 < dredgeCells.length; k2++)
+      addDrainDisk(d, (dredgeCells[k2] / NC) | 0, dredgeCells[k2] % NC, 2, 0.5);
+    if (enabledCanal) canalRoutes.forEach(function (rt) {
+      for (var k3 = 0; k3 < rt.cells.length; k3++)
+        addDrainDisk(d, (rt.cells[k3] / NC) | 0, rt.cells[k3] % NC, 2, 0.8);
     });
     return d;
   }
@@ -230,9 +249,12 @@ window.IVCompare = (function () {
       fetch("data/yala_boundary.geojson?t=" + t).then(function (r) { return r.json(); }),
       fetch("data/intervention_sim.json?t=" + t).then(function (r) { return r.json(); }),
       fetch("data/flood_response.json?t=" + t).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
-      fetch("data/intervention_candidates.geojson?t=" + t).then(function (r) { return r.json(); }).catch(function () { return null; })
+      fetch("data/intervention_candidates.geojson?t=" + t).then(function (r) { return r.json(); }).catch(function () { return null; }),
+      fetch("data/yala_pump_stations.geojson?t=" + t).then(function (r) { return r.json(); }).catch(function () { return null; }),
+      fetch("data/yala_drainage_network_filtered.geojson?t=" + t).then(function (r) { return r.json(); }).catch(function () { return null; })
     ]);
     var G = res[0], BG = res[1], B = res[2]; sim = res[3]; FR = res[4]; var cand = res[5];
+    var pumpsFc = res[6], drainNet = res[7];
     NC = G.ncols; NR = G.nrows; N = NC * NR;
     OLON = G.origin_lon; OLAT = G.origin_lat; DLON = G.dlon; DLAT = G.dlat;
     DESIGN_S = sim.design_stage_m; FREEBOARD = sim.freeboard_m; STAGE = DESIGN_S;
@@ -254,6 +276,31 @@ window.IVCompare = (function () {
     if (G.drain_cm) {
       for (var i = 0; i < N; i++) drainM[i] = (G.drain_cm[i] || 0) / 100;
     }
+    // feather น้ำฉากหลัง: BFS ระยะ (เซลล์) จากขอบเขตเทศบาลออกไปด้านนอก
+    // เมื่อเปิดคันกั้นแล้วเมืองแห้ง น้ำบริบทนอกเขตจะค่อย ๆ ตื้น/จางเข้าหาเมือง แทนการถูกตัดเป็นหน้าผาตรงเส้นเขต
+    (function () {
+      var K = 14;                                   // ~14 เซลล์ (~420 ม.) ช่วงเกลี่ย
+      var dist = new Int32Array(N); dist.fill(-1);
+      var q = new Int32Array(N), qh = 0, qt = 0;
+      for (var i0 = 0; i0 < N; i0++) if (inStudy[i0]) { dist[i0] = 0; q[qt++] = i0; }
+      var DR = [-1, 1, 0, 0], DC = [0, 0, -1, 1];
+      while (qh < qt) {
+        var cc0 = q[qh++];
+        if (dist[cc0] >= K) continue;
+        var r0 = (cc0 / NC) | 0, c0 = cc0 % NC;
+        for (var d = 0; d < 4; d++) {
+          var rr = r0 + DR[d], cn = c0 + DC[d];
+          if (rr < 0 || cn < 0 || rr >= NR || cn >= NC) continue;
+          var j = rr * NC + cn;
+          // ไม่ข้ามร่องแม่น้ำ — ฝั่งตรงข้ามไม่มีกำแพง น้ำต้องท่วมถึงริมตลิ่งตามเดิม (ไม่จาง)
+          if (dist[j] >= 0 || !valid[j] || chanMask[j]) continue;
+          dist[j] = dist[cc0] + 1; q[qt++] = j;
+        }
+      }
+      ctxFeather = new Float32Array(N);
+      for (var i1 = 0; i1 < N; i1++)
+        ctxFeather[i1] = inStudy[i1] ? 1 : (dist[i1] < 0 ? 1 : Math.min(1, dist[i1] / K));
+    })();
     retentionPonds = []; bottleneckList = []; floodgateList = [];
     enabledRetention = {}; enabledBottleneck = {}; enabledFloodgate = {};
     if (cand && cand.features) {
@@ -277,6 +324,34 @@ window.IVCompare = (function () {
           bottleneckList.push({ cell: idx, r: r, c: c });
         } else if (p.kind === "floodgate") {
           floodgateList.push({ cell: idx });
+        }
+      });
+    }
+    // มาตรการเสริม 1: อัปเกรดสถานีสูบน้ำเดิม — ตำแหน่งจริงของเทศบาล (11 สถานี)
+    pumpCells = [];
+    if (pumpsFc && pumpsFc.features) pumpsFc.features.forEach(function (f) {
+      var g = f.geometry; if (!g || g.type !== "Point") return;
+      var c = Math.floor((g.coordinates[0] - OLON) / DLON), r = Math.floor((OLAT - g.coordinates[1]) / DLAT);
+      if (r >= 0 && c >= 0 && r < NR && c < NC) pumpCells.push({ r: r, c: c });
+    });
+    // มาตรการเสริม 2: ขุดลอกคลอง/คูระบายเดิม — rasterize โครงข่ายคลองลงกริด + วัดความยาวรวม
+    dredgeCells = []; dredgeKm = 0;
+    if (drainNet && drainNet.features) {
+      var seenDr = new Uint8Array(N);
+      drainNet.features.forEach(function (f) {
+        var g = f.geometry; if (!g || g.type !== "LineString") return;
+        var cs = g.coordinates;
+        for (var k = 0; k < cs.length - 1; k++) {
+          dredgeKm += haversine(cs[k], cs[k + 1]) / 1000;
+          var x1 = (cs[k][0] - OLON) / DLON, y1 = (OLAT - cs[k][1]) / DLAT;
+          var x2 = (cs[k + 1][0] - OLON) / DLON, y2 = (OLAT - cs[k + 1][1]) / DLAT;
+          var steps = Math.max(1, Math.ceil(Math.hypot(x2 - x1, y2 - y1) * 2));
+          for (var s2 = 0; s2 <= steps; s2++) {
+            var f2 = s2 / steps, cx = Math.round(x1 + (x2 - x1) * f2), cy = Math.round(y1 + (y2 - y1) * f2);
+            if (cx < 0 || cy < 0 || cx >= NC || cy >= NR) continue;
+            var di = cy * NC + cx;
+            if (!seenDr[di] && valid[di]) { seenDr[di] = 1; dredgeCells.push(di); }
+          }
         }
       });
     }
@@ -313,6 +388,13 @@ window.IVCompare = (function () {
     toggleRetention: function (cell, on) { enabledRetention[cell] = (on == null) ? !enabledRetention[cell] : !!on; computeAfter(); emit("after"); },
     toggleBottleneck: function (cell, on) { enabledBottleneck[cell] = (on == null) ? !enabledBottleneck[cell] : !!on; computeAfter(); emit("after"); },
     toggleFloodgate: function (cell, on) { enabledFloodgate[cell] = (on == null) ? !enabledFloodgate[cell] : !!on; computeAfter(); emit("after"); },
+    // มาตรการเสริม (drain-only — arrival ไม่เปลี่ยน จึงแค่ re-threshold สถิติ ไม่ต้องรัน Priority-Flood ซ้ำ)
+    togglePumpUpgrade: function (on) { enabledPumpUpgrade = (on == null) ? !enabledPumpUpgrade : !!on; recalcStats(); emit("after"); },
+    toggleDredge: function (on) { enabledDredge = (on == null) ? !enabledDredge : !!on; recalcStats(); emit("after"); },
+    toggleCanalDrain: function (on) { enabledCanal = (on == null) ? !enabledCanal : !!on; recalcStats(); emit("after"); },
+    extras: function () { return { pump: enabledPumpUpgrade, dredge: enabledDredge, canal: enabledCanal }; },
+    pumpCount: function () { return pumpCells.length; },
+    dredgeKm: function () { return dredgeKm; },
     infoEnabledCount: function () {
       var n = 0;
       retentionPonds.forEach(function (p) { if (enabledRetention[p.cell]) n++; });
@@ -345,6 +427,8 @@ window.IVCompare = (function () {
     getStage: function () { return STAGE; },
     flowField: function () { if (!flowCache) computeFlow(); return flowCache; },
     meta: function () { return { NC: NC, NR: NR, N: N, OLON: OLON, OLAT: OLAT, DLON: DLON, DLAT: DLAT, STAGE: STAGE, DESIGN_S: DESIGN_S }; },
+    // feather 0→1 ของเซลล์นอกเขต (ระยะจากขอบเขตเมือง) — ใช้เกลี่ยน้ำฉากหลังเมื่อเปิดคันกั้น
+    ctxFeather: function () { return ctxFeather; },
     // เซลล์ → arrival ตามฝั่ง split (col < split*NC = ก่อน, มิฉะนั้น = หลัง)
     arrivals: function () { return { base: baseArrival, after: afterArrival, ctx: ctxArrival }; },
     arrays: function () { return { ground: ground, valid: valid, chanMask: chanMask, inStudy: inStudy, bld: bld, channel: sim._channel }; },

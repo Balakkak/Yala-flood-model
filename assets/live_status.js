@@ -85,10 +85,11 @@
     var storageMcm = parseFloat(entry.dam_storage);
     var storagePct = parseFloat(entry.dam_storage_percent);
     if (isNaN(storagePct)) storagePct = isNaN(storageMcm) ? NaN : (storageMcm / BANGLONG_CAP * 100);
+    var num = function (v) { var n = parseFloat(v); return isNaN(n) ? null : n; }; // 0 เป็นค่าจริง ไม่ใช่ "ไม่มีข้อมูล"
     return {
       storage: isNaN(storagePct) ? null : storagePct,
-      released: parseFloat(entry.dam_released) || null,
-      inflow: parseFloat(entry.dam_inflow) || null
+      released: num(entry.dam_released),
+      inflow: num(entry.dam_inflow)
     };
   }
 
