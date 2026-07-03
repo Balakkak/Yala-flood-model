@@ -87,7 +87,12 @@ window.IVViews = (function () {
     else if (total === 0) det.innerHTML = 'ยังไม่เปิดมาตรการ — ติ๊กมาตรการด้านล่างเพื่อดูผลรวม';
     else det.innerHTML = 'ลดปริมาตรน้ำท่วม ~<b>' + fmt(Math.max(0, s.reduced.volume_m3)) + ' ลบ.ม.</b>' +
       ' · อาคารพ้นน้ำ ~<b>' + fmt(Math.max(0, s.reduced.buildings)) + ' หลัง</b>' +
-      ' · พื้นที่แห้งลง ~<b>' + fmt(Math.max(0, s.reduced.area_rai)) + ' ไร่</b>';
+      ' · พื้นที่แห้งลง ~<b>' + fmt(Math.max(0, s.reduced.area_rai)) + ' ไร่</b>' +
+      (pct >= 99.95
+        ? '<div style="margin-top:5px;padding-top:5px;border-top:1px dashed rgba(0,0,0,.1);color:#334155;">' +
+          '<i class="ti ti-map-pin-check" style="color:#047857;"></i> เขตเทศบาล (ในเส้นประ) แห้งทั้งเขต — ' +
+          'น้ำที่ยังเห็นบนแผนที่คือ<b>นอกเขตเทศบาล</b>และแม่น้ำ ซึ่งเป็นฉากบริบทที่มาตรการไม่ครอบคลุม</div>'
+        : ' <span style="color:#94a3b8;">· นับเฉพาะในเขตเทศบาล (เส้นประบนแผนที่)</span>');
   }
 
   // ---- แถวมาตรการโชว์แค่ชื่อ — ปุ่มลูกศรมุมขวากางรายละเอียด (กันสับสนกับการติ๊ก) ----
@@ -187,7 +192,7 @@ window.IVViews = (function () {
       var dv = Math.max(0, m.volume_m3), db = Math.max(0, m.buildings);
       var pct = Math.round(dv / s.before.volume_m3 * 1000) / 10;
       row.box.innerHTML = '<i class="ti ti-droplet-down"></i> ' + (row.volNote ? row.volNote + " · " : "") +
-        'ช่วยลดน้ำท่วม ~<b>' + fmt(dv) + ' ลบ.ม.</b> = <b>' + pct + '%</b> ของปริมาตรท่วม' +
+        'ช่วยลดน้ำท่วม ~<b>' + fmt(dv) + ' ลบ.ม.</b> = <b>' + pct + '%</b> ของน้ำท่วมในเขตเทศบาล' +
         (db > 0 ? ' · อาคารพ้นน้ำ ~<b>' + fmt(db) + ' หลัง</b>' : '') +
         (dv <= 0 ? ' <span style="color:#64748b;">(ยังไม่เห็นผลเพิ่ม — น้ำระดับนี้มากเกินกว่ามาตรการนี้ หรือมาตรการอื่นที่เปิดอยู่คลุมพื้นที่แล้ว · ลองลดสไลเดอร์แม่น้ำ)</span>' : '');
       row.box.style.display = "block";
