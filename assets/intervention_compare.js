@@ -236,6 +236,45 @@ window.IVCompare = (function () {
     recalcStats();
   }
 
+  // ---- ผลรายมาตรการ (marginal) : "มาตรการนี้ตัวเดียวช่วยลดเท่าไร" เทียบกับชุดที่เปิดอยู่ตอนนี้ลบตัวมันออก ----
+  // มาตรการกลุ่มระบาย/หน่วง (แก้มลิง/คอขวด/สูบ/ขุดลอก/คลอง) ไม่เปลี่ยน arrival → แค่ re-threshold (เร็ว)
+  // มาตรการที่เปลี่ยนภูมิประเทศ (คันกั้น/ประตูระบาย) ต้องรัน Priority-Flood ใหม่ → cache กริดตามชุดที่เปิด
+  var margArrCache = {};
+  function elevSignature() {
+    var ids = levees.filter(function (l) { return enabled[l.rank]; }).map(function (l) { return "L" + l.rank; });
+    floodgateList.forEach(function (f) { if (enabledFloodgate[f.cell]) ids.push("G" + f.cell); });
+    return ids.sort().join(",");
+  }
+  function marginalOf(kind, key) {
+    if (!ready || !statsCache) return null;
+    var withAfter = statsCache.after, restore = null, needPF = false;
+    if (kind === "levee")      { if (!enabled[key]) return null;            enabled[key] = false;            restore = function () { enabled[key] = true; };            needPF = true; }
+    else if (kind === "gate")  { if (!enabledFloodgate[key]) return null;   enabledFloodgate[key] = false;   restore = function () { enabledFloodgate[key] = true; };   needPF = true; }
+    else if (kind === "ret")   { if (!enabledRetention[key]) return null;   enabledRetention[key] = false;   restore = function () { enabledRetention[key] = true; }; }
+    else if (kind === "btl")   { if (!enabledBottleneck[key]) return null;  enabledBottleneck[key] = false;  restore = function () { enabledBottleneck[key] = true; }; }
+    else if (kind === "pump")  { if (!enabledPumpUpgrade) return null;      enabledPumpUpgrade = false;      restore = function () { enabledPumpUpgrade = true; }; }
+    else if (kind === "dredge"){ if (!enabledDredge) return null;           enabledDredge = false;           restore = function () { enabledDredge = true; }; }
+    else if (kind === "canal") { if (!enabledCanal) return null;            enabledCanal = false;            restore = function () { enabledCanal = true; }; }
+    else return null;
+    var without;
+    try {
+      var arr = afterArrival;
+      if (needPF) {
+        var sig = elevSignature();                       // ชุดคันกั้น/ประตู "ที่เหลือ" หลังปิดตัวนี้
+        if (Object.keys(margArrCache).length > 10) margArrCache = {};   // กันโตไม่จำกัด (~0.5MB/กริด)
+        arr = margArrCache[sig] || (margArrCache[sig] = priorityFlood(elevWithLevees(), sim._channel));
+      }
+      without = statsOf(arr, getActiveDrain());
+    } finally { restore(); }
+    var dv = without.volume_m3 - withAfter.volume_m3;
+    var beforeVol = statsCache.before.volume_m3;
+    return {
+      volume_m3: dv,
+      buildings: without.buildings - withAfter.buildings,
+      pct: beforeVol > 0 ? Math.round(dv / beforeVol * 1000) / 10 : 0
+    };
+  }
+
   // ---- สนามทิศการไหล D8 (steepest descent) บน elevation หลังมีสิ่งก่อสร้าง ----
   function computeFlow() {
     var elev = elevWithLevees();
@@ -448,6 +487,7 @@ window.IVCompare = (function () {
     splitLon: function () { return OLON + split * NC * DLON; },
     levees: function () { return levees; },
     stats: function () { return statsCache; },
+    marginalOf: marginalOf,   // ผลรายมาตรการ ณ ระดับน้ำปัจจุบัน — {volume_m3, buildings, pct ของปริมาตรท่วมก่อนมาตรการ}
     getDrain: getActiveDrain,
     getBaseDrain: function () { return drainM; },   // ความจุระบายเดิมของเมือง (ไม่รวมมาตรการ) — ฝั่ง "ก่อน" ใช้
     // เปิด/ปิดมาตรการกายภาพรายจุด (key = เซลล์ศูนย์กลางที่ UI ส่งมา) → รันจำลองซ้ำ + ปล่อยอีเวนต์
