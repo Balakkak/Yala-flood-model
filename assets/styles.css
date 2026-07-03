@@ -743,6 +743,10 @@ path.river-flow-anim {
 /* มุมขวาล่างของแผนที่เป็นที่ของแผงจำลอง (.sim-float, z 600) — กด z คอนโทรล Leaflet ฝั่งนั้นให้ต่ำกว่า
    (ปุ่มเลือกชั้นข้อมูลย้ายไป bottomleft แล้ว จะได้ไม่ถูกแผงทับ) */
 .leaflet-bottom.leaflet-right { z-index: 500; }
+/* มุมซ้ายล่าง: ปุ่มชั้นข้อมูลอยู่บน แถบเครดิต Leaflet/OSM อยู่ล่างสุดเสมอ (ไม่ขึ้นกับลำดับที่ถูก add) */
+.leaflet-bottom.leaflet-left { display: flex; flex-direction: column; align-items: flex-start; }
+.leaflet-bottom.leaflet-left .leaflet-control-layers { order: 1; }
+.leaflet-bottom.leaflet-left .leaflet-control-attribution { order: 2; margin-top: 0; }
 .panel-close {
   position: absolute; top: 9px; right: 10px; width: 28px; height: 28px;
   border: 1px solid var(--line); background: #fff; color: var(--ink-500); cursor: pointer;
