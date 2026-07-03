@@ -266,7 +266,7 @@ window.IV3D = (function () {
                "fill-extrusion-height": ["case", ["==", ["get", "on"], 1], 4.8, 1.7],
                "fill-extrusion-base": ["case", ["==", ["get", "on"], 1], 4.5, 1.5],
                "fill-extrusion-vertical-gradient": false } });
-    // เส้นประขอบเขตเทศบาล — ขอบเขตที่สถิติ/หลอดผลรวมนับ (น้ำนอกเส้นเป็นฉากบริบท) ให้ตรงกับ 2D
+    // เส้นประขอบเขตเทศบาล — เส้นอ้างอิงภูมิศาสตร์ให้ตรงกับ 2D (สถิตินับน้ำท่วมทั้งพื้นที่ ไม่จำกัดเขต)
     fetch("data/yala_boundary.geojson?t=" + Date.now()).then(function (r) { return r.json(); }).then(function (b) {
       if (map.getSource("iv-boundary")) return;
       map.addSource("iv-boundary", { type: "geojson", data: b });
@@ -278,7 +278,7 @@ window.IV3D = (function () {
     buildArrays();
     updateSplit();
     stageCur = stageTarget = IVCompare.getStage();
-    featherOn = (IVCompare.enabledCount && IVCompare.enabledCount() > 0) ? 1.0 : 0.0;
+    featherOn = 0.0;   // arrival เต็มกริดทั้งก่อน/หลังแล้ว — ไม่มีรอยต่อเขตให้เกลี่ยอีก (หน้าผาน้ำที่กำแพง = ของจริง)
     map.addLayer(waterLayer);
   }
 
@@ -307,7 +307,7 @@ window.IV3D = (function () {
       drainArr[i] = drn[i];
     }
     afterBufferDirty = true;
-    featherOn = (IVCompare.enabledCount && IVCompare.enabledCount() > 0) ? 1.0 : 0.0;   // เกลี่ยน้ำฉากหลังเมื่อเปิดคันกั้น
+    featherOn = 0.0;   // ผืนน้ำเดียวทั้งกริด — ไม่ต้องเกลี่ยรอยต่อเขตอีก
     if (map.getSource("iv-levee-wall")) map.getSource("iv-levee-wall").setData(leveeWallGeoJSON());   // วาดกำแพง 3D ตามมาตรการที่เปิด
     if (map) map.triggerRepaint();
   }

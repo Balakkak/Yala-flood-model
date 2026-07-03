@@ -26,39 +26,30 @@ window.IVViews = (function () {
   }
 
   // ================= 2D =================
+  // วาดน้ำ "ผืนเดียวทั้งกริด" (โมเดล/สถิติคิดรวมทั้งเมือง ไม่แยกน้ำฉากบริบทนอกเขตอีก — น้ำไม่เลือกเขต)
   function draw2D() {
     if (!ctx) return;
-    var A = IVCompare.arrivals(), base = A.base, after = A.after, ctxArr = A.ctx;
-    var ar = IVCompare.arrays(), inStudy = ar.inStudy, chan = ar.chanMask;
+    var A = IVCompare.arrivals(), base = A.base, after = A.after;
+    var ar = IVCompare.arrays(), chan = ar.chanMask;
     var st = IVCompare.getStage(), split = IVCompare.getSplit(), splitCol = split * NC;
     var drain = IVCompare.getDrain();     // ความจุระบายจากมาตรการที่เปิด (แก้มลิง/คอขวด) → ฝั่ง "หลัง"
     var drain0 = IVCompare.getBaseDrain ? IVCompare.getBaseDrain() : null;   // ระบายเดิมของเมือง → ฝั่ง "ก่อน" (สอดคล้องสถิติ)
-    // เปิดคันกั้นแล้วเมืองแห้ง → เกลี่ยน้ำฉากหลังนอกเขตให้ตื้น/จางเข้าหาเมือง (ไม่เป็นหน้าผาน้ำตรงเส้นเขต)
-    var feather = IVCompare.ctxFeather ? IVCompare.ctxFeather() : null;
-    var soften = feather && IVCompare.enabledCount() > 0;
     var img = ctx.createImageData(NC, NR), d = img.data;
     for (var r = 0; r < NR; r++) for (var c = 0; c < NC; c++) {
       var i = r * NC + c, o = i * 4;
       if (chan[i]) { d[o + 3] = 0; continue; }
-      if (!inStudy[i]) {
-        // นอกเขตเทศบาล = น้ำฉากหลัง (บริบท ให้ภาพต่อเนื่องกับหน้าจำลองน้ำท่วม) — จางกว่า ไม่เข้าสถิติ
-        var f = soften ? feather[i] : 1;
-        // จางเข้าหาขอบกริด DEM (~18 เซลล์) — กันผืนน้ำถูกตัดเป็นเส้นตรงตามขอบข้อมูล
-        f *= Math.min(1, Math.min(Math.min(r, NR - 1 - r), Math.min(c, NC - 1 - c)) / 18);
-        if (ctxArr && ctxArr[i] <= st && f > 0.04) {
-          var cc = depthColor((st - ctxArr[i]) * f);
-          d[o] = cc[0]; d[o + 1] = cc[1]; d[o + 2] = cc[2]; d[o + 3] = Math.round(145 * f);
-        } else { d[o + 3] = 0; }
-        continue;
-      }
+      // จางเข้าหาขอบกริด DEM (~18 เซลล์) — กันผืนน้ำถูกตัดเป็นเส้นตรงตามขอบข้อมูล
+      var f = Math.min(1, Math.min(Math.min(r, NR - 1 - r), Math.min(c, NC - 1 - c)) / 18);
+      if (f <= 0.04) { d[o + 3] = 0; continue; }
+      var d0 = drain0 ? drain0[i] : 0;
       var useBefore = c < splitCol;
       var arr = useBefore ? base[i] : after[i];
-      var dep = st - arr - (useBefore ? (drain0 ? drain0[i] : 0) : drain[i]);   // ทั้งสองฝั่งหักระบายเดิม · ฝั่งหลังหักของมาตรการเพิ่ม
+      var dep = st - arr - (useBefore ? d0 : drain[i]);   // ทั้งสองฝั่งหักระบายเดิม · ฝั่งหลังหักของมาตรการเพิ่ม
       if (dep > 0.03) {
         var col = depthColor(dep);
-        d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 205;
-      } else if (!useBefore && st - base[i] - (drain0 ? drain0[i] : 0) > 0.03) {
-        d[o] = 52; d[o + 1] = 211; d[o + 2] = 153; d[o + 3] = 150;   // ท่วมตอน "ก่อน" แต่แห้งเพราะมาตรการ = เขียว
+        d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = Math.round(200 * f);
+      } else if (!useBefore && st - base[i] - d0 > 0.03) {
+        d[o] = 52; d[o + 1] = 211; d[o + 2] = 153; d[o + 3] = Math.round(150 * f);   // ท่วมตอน "ก่อน" แต่แห้งเพราะมาตรการ = เขียว
       } else { d[o + 3] = 0; }
     }
     ctx.putImageData(img, 0, 0);
@@ -88,11 +79,7 @@ window.IVViews = (function () {
     else det.innerHTML = 'ลดปริมาตรน้ำท่วม ~<b>' + fmt(Math.max(0, s.reduced.volume_m3)) + ' ลบ.ม.</b>' +
       ' · อาคารพ้นน้ำ ~<b>' + fmt(Math.max(0, s.reduced.buildings)) + ' หลัง</b>' +
       ' · พื้นที่แห้งลง ~<b>' + fmt(Math.max(0, s.reduced.area_rai)) + ' ไร่</b>' +
-      (pct >= 99.95
-        ? '<div style="margin-top:5px;padding-top:5px;border-top:1px dashed rgba(0,0,0,.1);color:#334155;">' +
-          '<i class="ti ti-map-pin-check" style="color:#047857;"></i> เขตเทศบาล (ในเส้นประ) แห้งทั้งเขต — ' +
-          'น้ำที่ยังเห็นบนแผนที่คือ<b>นอกเขตเทศบาล</b>และแม่น้ำ ซึ่งเป็นฉากบริบทที่มาตรการไม่ครอบคลุม</div>'
-        : ' <span style="color:#94a3b8;">· นับเฉพาะในเขตเทศบาล (เส้นประบนแผนที่)</span>');
+      ' <span style="color:#94a3b8;">· นับน้ำท่วมทั้งพื้นที่บนแผนที่ ไม่จำกัดเขต</span>';
   }
 
   // ---- แถวมาตรการโชว์แค่ชื่อ — ปุ่มลูกศรมุมขวากางรายละเอียด (กันสับสนกับการติ๊ก) ----
@@ -192,7 +179,7 @@ window.IVViews = (function () {
       var dv = Math.max(0, m.volume_m3), db = Math.max(0, m.buildings);
       var pct = Math.round(dv / s.before.volume_m3 * 1000) / 10;
       row.box.innerHTML = '<i class="ti ti-droplet-down"></i> ' + (row.volNote ? row.volNote + " · " : "") +
-        'ช่วยลดน้ำท่วม ~<b>' + fmt(dv) + ' ลบ.ม.</b> = <b>' + pct + '%</b> ของน้ำท่วมในเขตเทศบาล' +
+        'ช่วยลดน้ำท่วม ~<b>' + fmt(dv) + ' ลบ.ม.</b> = <b>' + pct + '%</b> ของน้ำท่วมทั้งพื้นที่' +
         (db > 0 ? ' · อาคารพ้นน้ำ ~<b>' + fmt(db) + ' หลัง</b>' : '') +
         (dv <= 0 ? ' <span style="color:#64748b;">(ยังไม่เห็นผลเพิ่ม — น้ำระดับนี้มากเกินกว่ามาตรการนี้ หรือมาตรการอื่นที่เปิดอยู่คลุมพื้นที่แล้ว · ลองลดสไลเดอร์แม่น้ำ)</span>' : '');
       row.box.style.display = "block";

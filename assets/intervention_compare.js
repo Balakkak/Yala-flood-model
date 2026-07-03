@@ -8,7 +8,8 @@
  *   - เปิด/ปิด "คันกั้น" แต่ละมาตรการ → ยกเซลล์คันกั้น → รัน Priority-Flood ซ้ำ = "หลัง"
  *   - split (0..1) คุมทั้ง 2D/3D: คอลัมน์ซ้าย < split = ก่อน, ขวา = หลัง (swipe เดียว)
  *   - สถิติ: ปริมาตรน้ำ / พื้นที่ / อาคารท่วม — ก่อน, หลัง, ลดลง
- * อัลกอริทึมตรงกับ scripts/analyze_interventions.py (ตัวเลขจึงตรงกับมาตรการที่แนะนำ)
+ *     นับ "ทั้งกริด" ไม่จำกัดเขตเทศบาล (น้ำจริงไม่เลือกเขต) — ต่างจาก analyze_interventions.py
+ *     ที่คัดกรองรายมาตรการเฉพาะในเขตศึกษา (ใช้จัดอันดับ ไม่ใช่สถิติหน้าเว็บ)
  * ========================================================================== */
 window.IVCompare = (function () {
   "use strict";
@@ -68,10 +69,11 @@ window.IVCompare = (function () {
     return arr;
   }
 
-  // depth = STAGE − arrival เฉพาะ "น้ำท่วมในเมือง" (ในเขตศึกษา, ไม่ใช่ร่องน้ำจริง)
+  // depth = STAGE − arrival — นับน้ำท่วม "ทั้งพื้นที่" ในกริด (น้ำจริงไม่เลือกเขต จึงไม่จำกัดเขตเทศบาล)
+  // ยกเว้นร่องน้ำจริง (แม่น้ำ/คลอง) ซึ่งมีน้ำเป็นปกติ ไม่ใช่น้ำท่วม
   function isCityFlooded(arr, i, currentDrain) {
     var d = currentDrain ? currentDrain[i] : (drainM ? drainM[i] : 0);
-    return inStudy[i] && !chanMask[i] && arr[i] <= STAGE && (STAGE - arr[i] - d > 0.03);
+    return valid[i] && !chanMask[i] && arr[i] <= STAGE && (STAGE - arr[i] - d > 0.03);
   }
   // เซลล์รับประโยชน์ "ท้ายน้ำ" ของมาตรการหน่วง/ระบาย — จุดดักน้ำ (แก้มลิง/คอขวด/ปลายคลอง)
   // มักอยู่บนที่สูงที่น้ำแม่น้ำท่วมไม่ถึง (arrival > ระดับออกแบบ) → ถ้าวางวงบริการตรงหมุด
@@ -111,7 +113,7 @@ window.IVCompare = (function () {
     var DR = [-1, 1, 0, 0], DC = [0, 0, -1, 1];
     while (qh < q.length && budget > 0 && qh < 20000) {
       var cur = q[qh++];
-      if (inStudy[cur] && !chanMask[cur]) {
+      if (!chanMask[cur]) {                                    // ลดความลึกทุกเซลล์ผืนน้ำ (นับทั้งพื้นที่ ไม่จำกัดเขต)
         var rem = STAGE - arr[cur] - d[cur];                   // ความลึกที่เหลือหลังหักระบายอื่น
         if (rem > 0.03) {
           var relief = Math.min(rem, budget / CELL_M2);
@@ -231,7 +233,8 @@ window.IVCompare = (function () {
     };
   }
   function computeAfter() {
-    afterArrival = priorityFlood(elevWithLevees(), sim._channel);
+    // full=true: จำลองทั้งกริด — น้ำจริงไม่เลือกเขต สถิติ/ภาพจึงคิดรวมทั้งเมืองและพื้นที่รอบนอก
+    afterArrival = priorityFlood(elevWithLevees(), sim._channel, true);
     flowCache = null;                      // สนามการไหลเปลี่ยนเมื่อสิ่งก่อสร้างเปลี่ยน
     recalcStats();
   }
@@ -262,7 +265,7 @@ window.IVCompare = (function () {
       if (needPF) {
         var sig = elevSignature();                       // ชุดคันกั้น/ประตู "ที่เหลือ" หลังปิดตัวนี้
         if (Object.keys(margArrCache).length > 10) margArrCache = {};   // กันโตไม่จำกัด (~0.5MB/กริด)
-        arr = margArrCache[sig] || (margArrCache[sig] = priorityFlood(elevWithLevees(), sim._channel));
+        arr = margArrCache[sig] || (margArrCache[sig] = priorityFlood(elevWithLevees(), sim._channel, true));
       }
       without = statsOf(arr, getActiveDrain());
     } finally { restore(); }
@@ -461,9 +464,9 @@ window.IVCompare = (function () {
     }
     levees = sim.levees || [];
     levees.forEach(function (l) { enabled[l.rank] = false; });
-    baseArrival = priorityFlood(ground, channel);
-    // น้ำ "ฉากหลัง" ทั้งกริด (นอกเขตเทศบาล) — บริบทภาพเท่านั้น เหมือนกันทั้งก่อน/หลัง ไม่เข้าสถิติ
-    ctxArrival = priorityFlood(ground, channel, true);
+    // full=true: baseline ทั้งกริด — สถิติ/ภาพนับน้ำท่วมรวมทั้งเมือง ไม่จำกัดเขตเทศบาล (น้ำไม่เลือกเขต)
+    baseArrival = priorityFlood(ground, channel, true);
+    ctxArrival = baseArrival;              // คง API เดิม (เคยเป็นน้ำฉากหลังนอกเขต — ตอนนี้ผืนเดียวกับ baseline)
     computeAfter();
     computeCanals();                 // เตรียมแนวคลองระบายน้ำเส้นใหม่ (routing บนกริดจริง)
     ready = true;
