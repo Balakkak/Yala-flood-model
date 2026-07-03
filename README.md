@@ -45,6 +45,10 @@ npm run preview      # เสิร์ฟ dist/ ที่ http://localhost:8080/
   ตั้งระดับในหน้าจำลอง → เข้าหน้าแก้โครงสร้าง จะใช้ระดับเดิมทันที (มีแถบแจ้ง)
 - **จำมุมมองล่าสุด** — `localStorage["yalaView"]` (2d/3d) ทำให้กดหน้าต่างไหนก็เปิดมุมมองที่เลือกไว้
 - ตรรกะแถบนำทางรวมที่ [`assets/nav.js`](assets/nav.js)
+- **SharedWorker กลาง** ([`assets/shared_worker.js`](assets/shared_worker.js) + shim [`assets/shared_data.js`](assets/shared_data.js)) —
+  แคชไฟล์ `data/*` ให้ทุกหน้า/แท็บ (in-memory + CacheStorage พร้อม ETag revalidation → สลับหน้าไม่โหลด
+  ข้อมูลหลาย MB ซ้ำ แม้ fetch จะติด `?t=` bust cache) และดึงข้อมูลสดเขื่อน/ฝนชุดเดียวแจกทุกหน้า
+  · เบราว์เซอร์ไม่มี SharedWorker (เช่น Chrome Android) → ทำงานแบบเดิมอัตโนมัติ
 
 ## โครงสร้างโปรเจกต์
 ```

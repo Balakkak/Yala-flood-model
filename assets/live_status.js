@@ -124,7 +124,15 @@
 
   // ดึงเขื่อน+ฝนพร้อมกัน → เซฟแคช + ตั้งป้ายสถานะ อัตโนมัติ
   // คืน { source:"live"|"cache"|"none", data:{storage,released,inflow,rainfall}|null, ts }
+  // ถ้ามี SharedWorker กลาง (shared_data.js) → ใช้ข้อมูลสดชุดเดียวร่วมกันทุกหน้า/แท็บ
+  // (worker เป็นคน fetch — หน้าไหนขอก่อนหน้าอื่นได้ใช้ด้วย) · ไม่มี/พัง → ดึงเองแบบเดิม
   async function fetchLive() {
+    if (window.YalaShared && YalaShared.active) {
+      try {
+        var m = await YalaShared.getLive(120000);
+        if (m && m.ok && m.data) return report(true, m.data);
+      } catch (e) { /* worker ใช้ไม่ได้ → ดึงเองต่อ */ }
+    }
     var res = await Promise.all([getDam(), getRain()]);
     var dam = res[0], rain = res[1];
     var ok = !!dam || rain != null;
@@ -141,6 +149,11 @@
   var init = cacheLoad();
   if (init) setStatus("cached", "ข้อมูลล่าสุด " + fmtTime(init.ts));
   else setStatus("connecting", "กำลังเชื่อมต่อ…");
+
+  // worker poll รอบใหม่สำเร็จ (หรือเพิ่งเชื่อมต่อแล้ว worker มีข้อมูลอยู่แล้ว) → อัปเดตป้าย+แคชทันที
+  if (window.YalaShared) YalaShared.onLive(function (m) {
+    if (m && m.ok && m.data) report(true, m.data);
+  });
 
   window.YalaLive = {
     setStatus: setStatus,
