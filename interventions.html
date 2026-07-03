@@ -53,6 +53,8 @@
     /* มุมมอง 2D/3D */
     .vw-toggle { position:absolute; top:14px; right:14px; z-index:620; display:flex; gap:0;
       background:#fff; border:1px solid var(--line); border-radius:9px; overflow:hidden; box-shadow:var(--shadow-md); }
+    /* ปุ่มซูม/เข็มทิศของแผนที่ 3D (มุมขวาบน) — เลื่อนลงพ้นปุ่มสลับ 2D/3D */
+    #map3d .maplibregl-ctrl-top-right { top:48px; }
     .vw-toggle button { border:none; background:#fff; color:var(--ink-600); font:600 12px 'Sarabun',sans-serif;
       padding:6px 14px; cursor:pointer; }
     .vw-toggle button.active { background:#0c3b6e; color:#fff; }
