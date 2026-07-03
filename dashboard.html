@@ -270,7 +270,7 @@
     maxZoom: 19, attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
-  var layerControl = L.control.layers({ "แผนที่หลัก (OSM)": baseMap }, {}, { position: 'bottomright' }).addTo(map);  // เลี่ยงชนปุ่ม 2D/3D บนแผนที่
+  var layerControl = L.control.layers({ "แผนที่หลัก (OSM)": baseMap }, {}, { position: 'bottomleft' }).addTo(map);  // ซ้ายล่าง — ขวาล่างเป็นที่ของแผงจำลอง (.sim-float) เปิดแล้วจะทับปุ่มนี้
 
   // คงขนาดแผนที่ให้ถูกต้องเมื่อเป็น full-screen / ปรับขนาดหน้าต่าง
   window.addEventListener('resize', () => map.invalidateSize());

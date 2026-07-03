@@ -740,10 +740,9 @@ path.river-flow-anim {
 }
 .cta-sim:hover { transform: translateY(-2px); box-shadow: 0 12px 26px -6px rgba(2,132,199,.7); }
 .cta-sim.is-hidden { opacity: 0; transform: translateY(10px); pointer-events: none; }
-/* ปุ่มเลือกชั้นข้อมูล (Leaflet มุมขวาล่าง) — ยกขึ้นพ้นปุ่ม CTA "จำลองสถานการณ์น้ำท่วม" (สูง 44px + ระยะ 16px)
-   และกด z ให้ต่ำกว่าแผงจำลอง (600) — เปิดแผงแล้วแผงต้องอยู่บนสุด ไม่ใช่ปุ่มชั้นข้อมูลลอยทับเนื้อหาแผง */
+/* มุมขวาล่างของแผนที่เป็นที่ของแผงจำลอง (.sim-float, z 600) — กด z คอนโทรล Leaflet ฝั่งนั้นให้ต่ำกว่า
+   (ปุ่มเลือกชั้นข้อมูลย้ายไป bottomleft แล้ว จะได้ไม่ถูกแผงทับ) */
 .leaflet-bottom.leaflet-right { z-index: 500; }
-.leaflet-bottom.leaflet-right .leaflet-control-layers { margin-bottom: 74px; }
 .panel-close {
   position: absolute; top: 9px; right: 10px; width: 28px; height: 28px;
   border: 1px solid var(--line); background: #fff; color: var(--ink-500); cursor: pointer;
