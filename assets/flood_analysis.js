@@ -55,6 +55,7 @@
   let rainZoneMultiplier = 1.5;
   let rainZoneRadiusM = 2000;
   let _rainZoneIdCounter = 0;
+  let _rainZonesDirty = false; // เพิ่ม/ลบโซนฝนแล้วยังไม่ได้ rebuild โมเดล → บังคับ rebuild ตอนกดจำลอง
 
   // --- Long-run duration ---
   let simLongRunHours = 24;
@@ -90,6 +91,7 @@
   let DEM = null;        // { W, H, elev, valid, bbox }
   let inStudy = null;    // Uint8Array : เซลล์ในเขตเมือง (study mask)
   let inRegion = null;   // Uint8Array : เขตเมือง + buffer (กรอบวิเคราะห์/แสดงผล)
+  let regionFade = null; // Float32Array 0→1 : จางน้ำใกล้ขอบกรอบวิเคราะห์ (กันน้ำถูกตัดตรงขอบสี่เหลี่ยม)
   let cityDrainageGlobal = null;  // เก็บ drainage layer ไว้สำหรับ scenario-aware seeding
   let studyCount = 0;
   let arrival = null;    // Float32Array : ระดับน้ำที่เซลล์เชื่อมต่อแม่น้ำ
@@ -253,6 +255,18 @@
     if (studyCount === 0) { // fallback: ใช้ทั้ง DEM
       for (let i = 0; i < W * H; i++) if (valid[i]) { inStudy[i] = 1; inRegion[i] = 1; studyCount++; }
     }
+    // จางน้ำช่วง ~14 เซลล์ก่อนถึงขอบกรอบวิเคราะห์ — ผืนน้ำค่อย ๆ หายแทนการถูกตัดเป็นเส้นตรง
+    regionFade = new Float32Array(W * H);
+    const fc0 = (rw - bbox[0]) / resX, fc1 = (re - bbox[0]) / resX;
+    const fr0 = (bbox[3] - rn) / resY, fr1 = (bbox[3] - rs) / resY;
+    const EDGE_CELLS = 14;
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+      const i = r * W + c;
+      if (!inRegion[i]) continue;
+      const dEdge = Math.min(c - fc0, fc1 - c, r - fr0, fr1 - r,
+                             c, W - 1 - c, r, H - 1 - r);   // ขอบกรอบวิเคราะห์ + ขอบ DEM เอง
+      regionFade[i] = Math.max(0, Math.min(1, dEdge / EDGE_CELLS));
+    }
   }
 
   /* ----------------------------------------------------------------------- *
@@ -344,6 +358,8 @@
       });
     }
 
+    console.log('[flood_analysis] buildModel: ' + nSrc + ' source cells' +
+      (rainZones.length && scenario === 'custom' ? ' (+' + rainZones.length + ' rain zones)' : ''));
     arrival = new Float32Array(W * H).fill(Infinity);
     const heap = MinHeap();
     for (let i = 0; i < W * H; i++) if (source[i]) { arrival[i] = elev[i]; heap.push(elev[i], i); }
@@ -530,7 +546,9 @@
     // ===== ระดับน้ำ (stage) จากสูตรเดียวกับ 3D — 24 ชม. = ตรงกับ 3D เป๊ะ · นานขึ้น = สูงขึ้นเล็กน้อย =====
     const st0 = frStageOf(simInputs.rainfall, simInputs.river, (simInputs.damLevel != null ? simInputs.damLevel : 50));
     if (st0 != null && FR) {
-      customStage = st0 + (tMult - 1) * DURATION.STAGE_GAIN * (frOnset - frBase);   // 24h → +0
+      // duration ขยาย "ส่วนยกจากตัวขับ" ตามสัดส่วน (24h → ×1) — ไม่มีตัวขับ = น้ำไม่ขึ้นเอง
+      customStage = Math.min(frBase + (st0 - frBase) * (1 + (tMult - 1) * DURATION.STAGE_GAIN),
+                             frBase + FR.event_rise_m + 0.5);
       const cv = frCurveAt(customStage);
       SCENARIOS.custom.pct      = Math.min(0.95, Math.max(0, (cv ? cv.land_pct : 0) / 100));
       SCENARIOS.custom.depthRef = Math.max(0.05, cv ? cv.depth_p95 : 0.3);
@@ -554,8 +572,9 @@
       return;
     }
 
-    if (usesDrainage !== _lastSimDrainage || prevScenario !== 'custom') {
+    if (usesDrainage !== _lastSimDrainage || prevScenario !== 'custom' || _rainZonesDirty) {
       _lastSimDrainage = usesDrainage;
+      _rainZonesDirty = false;
       rebuildForScenario(); // calls buildModel → computeLevels + render internally
     } else {
       computeLevels();
@@ -574,7 +593,8 @@
     const tMult = simLongRunHours / 24;
     const st0 = frStageOf(simInputs.rainfall, simInputs.river, (simInputs.damLevel != null ? simInputs.damLevel : 50));
     if (st0 == null) return;
-    customStage = st0 + (tMult - 1) * DURATION.STAGE_GAIN * (frOnset - frBase);
+    customStage = Math.min(frBase + (st0 - frBase) * (1 + (tMult - 1) * DURATION.STAGE_GAIN),
+                           frBase + FR.event_rise_m + 0.5);
     const cv = frCurveAt(customStage);
     SCENARIOS.custom.pct      = Math.min(0.95, Math.max(0, (cv ? cv.land_pct : 0) / 100));
     SCENARIOS.custom.depthRef = Math.max(0.05, cv ? cv.depth_p95 : 0.3);
@@ -628,6 +648,7 @@
       );
     }
     rainZones.push(zone);
+    _rainZonesDirty = true;
     updateRainZoneList();
   }
 
@@ -636,6 +657,7 @@
     if (idx === -1) return;
     if (rainZones[idx].circle && typeof map !== 'undefined') map.removeLayer(rainZones[idx].circle);
     rainZones.splice(idx, 1);
+    _rainZonesDirty = true;
     updateRainZoneList();
     if (typeof map !== 'undefined') map.closePopup();
   };
@@ -814,11 +836,12 @@
       const frontFade = Math.min(1, Math.max(0.12, recency / 0.09));
 
       const p = ci * 4;
+      const edgeF = regionFade ? regionFade[ci] : 1;   // จางใกล้ขอบกรอบวิเคราะห์
       pxData[p]     = Math.max(0, Math.min(255, Math.round(126 + (12  - 126) * dd) + Math.round(sh * 0.3)));
       pxData[p + 1] = Math.max(0, Math.min(255, Math.round(200 + (63  - 200) * dd) + Math.round(sh * 0.15)));
       pxData[p + 2] = Math.max(0, Math.min(255, Math.round(230 + (110 - 230) * dd) + sh));
       pxData[p + 3] = Math.round(
-        Math.max(40, Math.min(255, Math.round(150 + 95 * dd) + Math.round(sh * 0.4))) * frontFade
+        Math.max(40, Math.min(255, Math.round(150 + 95 * dd) + Math.round(sh * 0.4))) * frontFade * edgeF
       );
     }
 
@@ -835,7 +858,7 @@
         const gap = curSurface - arrival[ci]; // how recently this cell flooded
         if (gap > frontThresh) continue;     // already deep in flood, skip
         const frontNorm = 1 - gap / frontThresh; // 1 = just flooded, 0 = edge of window
-        const a = Math.round(frontNorm * frontPulse * 200);
+        const a = Math.round(frontNorm * frontPulse * 200 * (regionFade ? regionFade[ci] : 1));
         if (a < 4) continue;
         const p = ci * 4;
         // Bright cyan-white: visually distinct from normal blue flood
@@ -859,7 +882,7 @@
         const acc = _flowAcc[ci];
         if (acc < thresh) continue;
         const accNorm = Math.min(1, (acc - thresh) / (thresh * 6));
-        const a = Math.round((0.55 + 0.40 * accNorm) * pulse * 255);
+        const a = Math.round((0.55 + 0.40 * accNorm) * pulse * 255 * (regionFade ? regionFade[ci] : 1));
         if (a < 4) continue;
         const p = ci * 4;
         pxData[p]     = 255;
@@ -1015,7 +1038,7 @@
         a[p]     = Math.round(stops[i0][0] + (stops[i1][0] - stops[i0][0]) * ft);
         a[p + 1] = Math.round(stops[i0][1] + (stops[i1][1] - stops[i0][1]) * ft);
         a[p + 2] = Math.round(stops[i0][2] + (stops[i1][2] - stops[i0][2]) * ft);
-        a[p + 3] = 205;
+        a[p + 3] = Math.round(205 * (regionFade ? regionFade[i] : 1));   // จางใกล้ขอบกรอบวิเคราะห์
       }
     }
     cx.putImageData(img, 0, 0);
@@ -1197,12 +1220,14 @@
       const entries = hourly.filter(e => e.dam_id === 50 || (e.name && e.name.toLowerCase().includes('banglang')));
       const entry = entries.length > 0 ? entries[entries.length - 1] : (hourly.length > 0 ? hourly[0] : null);
       if (!entry) return null;
+      const num = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; }; // 0 เป็นค่าจริง ไม่ใช่ "ไม่มีข้อมูล"
       const storageMcm = parseFloat(entry.dam_storage);
-      const storagePct = parseFloat(entry.dam_storage_percent) || (storageMcm / BANGLONG_CAP * 100);
+      let storagePct = parseFloat(entry.dam_storage_percent);
+      if (isNaN(storagePct)) storagePct = isNaN(storageMcm) ? NaN : (storageMcm / BANGLONG_CAP * 100);
       return {
         storage: isNaN(storagePct) ? null : storagePct,
-        released: parseFloat(entry.dam_released) || null,
-        inflow:   parseFloat(entry.dam_inflow)   || null,
+        released: num(entry.dam_released),
+        inflow:   num(entry.dam_inflow),
       };
     };
 
@@ -1375,6 +1400,7 @@
     if (rainClearAll) rainClearAll.onclick = function () {
       rainZones.forEach(function (z) { if (z.circle && typeof map !== 'undefined') map.removeLayer(z.circle); });
       rainZones.length = 0;
+      _rainZonesDirty = true;
       updateRainZoneList();
     };
 

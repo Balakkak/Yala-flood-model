@@ -8,8 +8,8 @@
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/tabler-icons.min.css" integrity="sha384-/Bmojb1H/9dHvtYa2TzEQ1MldjNefaS+t7DcnOYHpP+yer5gvd3LONWEpWhHK+Yo" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/dist/tabler-icons.min.css" integrity="sha384-ccZHbezhtZWmNy0cg8odL0D/jFU5k5HIls9y78Qd6lWor7rpvFIZtK0fTFG4z456" crossorigin="anonymous">
   <link rel="stylesheet" href="assets/styles.css">
   <style>
     .map3d-wrap { flex: 1; position: relative; overflow: hidden; }
@@ -472,6 +472,8 @@ async function buildScene() {
     void main(){
       /* connectivity flood − ความจุระบาย (สูบ+ฝาท่อ) → ย่านระบายดีท่วมตื้น & ลดก่อน */
       float depth=(a_arr<=u_stage)?max(0.0,u_stage-a_ground-a_drain):0.0;
+      /* จางเข้าหาขอบกริด DEM (smoothstep ~8% ของกริด) — กันผืนน้ำถูกตัดเป็นเส้นตรงตามขอบข้อมูล */
+      depth*=smoothstep(0.0,0.08,min(min(a_uv.x,1.0-a_uv.x),min(a_uv.y,1.0-a_uv.y)));
       float amp=clamp(depth*2.0,0.0,1.0);    /* คลื่นเล็กลงเมื่อน้ำตื้น → กันกะพริบขอบ */
       vec2 g=a_uv*48.0; /* swell กว้าง (ความถี่ต่ำ) → คลื่นไหลเนียนลื่น ไม่กระตุก */
       vec2 d1=vec2(0.30,0.95),d2=vec2(0.82,0.28),d3=vec2(-0.55,0.70);
@@ -592,7 +594,9 @@ async function buildScene() {
     // --- map ค่าสไลเดอร์ → ระดับน้ำเป้าหมาย (ผูกเกณฑ์กายภาพจริง · flood_response.py) ---
     let simHours3d = 24;   // ระยะเวลาจำลอง (24ชม=ค่าตรง · นานขึ้น=ดันระดับน้ำขึ้นเล็กน้อย เหมือน 2D)
     function targetStage(rain, river, dam){
-      return stageOf(rain, river, dam) + (simHours3d/24 - 1) * 0.25 * (frOnset - frBase);
+      // duration ขยาย "ส่วนยกจากตัวขับ" ตามสัดส่วน (24h → ×1) — ไม่มีตัวขับ = น้ำไม่ขึ้นเอง
+      const rise = stageOf(rain, river, dam) - frBase;
+      return Math.min(frBase + rise * (1 + (simHours3d/24 - 1) * 0.25), frBase + eventRise + 0.5);
     }
     function updateRiverBox3d(pct){
       pct = Math.round(pct);
