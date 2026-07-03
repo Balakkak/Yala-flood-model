@@ -202,7 +202,6 @@
           <div class="row"><span class="dot" style="background:#34d399"></span> พื้นที่ที่ <b>มาตรการกันน้ำได้</b></div>
           <div class="row"><span class="dot" style="background:#9ca3af"></span> กำแพงคันกั้น 3D (ตามแนวจริง)</div>
           <div class="row"><span class="dot" style="background:#dc2626"></span> จุดเสี่ยง · <span class="dot" style="background:#ea580c"></span> คอขวด · <span class="dot" style="background:#0d9488"></span> แก้มลิง · <span class="dot" style="background:#7c3aed"></span> ประตูระบาย/สูบ · <span class="dot" style="background:#0891b2"></span> คลองระบายน้ำใหม่</div>
-          <div class="row"><span style="display:inline-block;width:20px;height:10px;background:rgba(248,113,113,.35);border-radius:2px;flex:0 0 auto;"></span> พื้นที่<b>ท่วมซ้ำซากจริง</b> (GISTDA) รายตำบล — ยิ่งเข้ม = เคยท่วมมาก</div>
           <div class="row" style="font-size:10px;color:#64748b;">สถิติ/ผลมาตรการนับน้ำท่วมทั้งพื้นที่บนแผนที่ — น้ำจริงไม่เลือกเขต</div>
         </div>
       </div>
@@ -327,13 +326,6 @@
 
   var map = L.map('map', { zoomControl:true }).setView([6.54, 101.28], 13);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
-
-  // เขตน้ำท่วมซ้ำซากจริง GISTDA รายตำบล (อ้างอิงเบา ๆ) — ความทึบตามสัดส่วนพื้นที่ที่เคยท่วมจริง ไม่มีขั้นต่ำ
-  fetch('data/yala_flood_recurrence.geojson?t=' + Date.now()).then(r=>r.ok?r.json():null).then(d=>{
-    if(!d) return;
-    L.geoJSON(d, { style:f=>({ stroke:false, fillColor:'#f87171',
-      fillOpacity: Math.min(0.35, (f.properties.flood_area_pct||0)/100) }), interactive:false }).addTo(map);
-  }).catch(()=>{});
 
   // LayerGroup แยกตามประเภท — ซ่อนทุกอย่างโดยปริยาย
   var layerLevee = L.layerGroup();
