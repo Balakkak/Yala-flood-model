@@ -128,6 +128,39 @@ window.IVViews = (function () {
     else { pe.style.display = "none"; }
   }
 
+  // ============ ผลรายมาตรการ: บรรทัด "มาตรการนี้กัก/ระบาย + ลดน้ำท่วมได้เท่าไร กี่ %" ใต้แต่ละแถวที่เปิด ============
+  // ตัวเลขจาก IVCompare.marginalOf = ผลส่วนเพิ่มของมาตรการนี้ เทียบชุดมาตรการที่เปิดอยู่ลบตัวมันออก ณ ระดับน้ำปัจจุบัน
+  var impactRows = [], impactTimer = null;
+  function attachImpact(el, cb, kind, key, volNote) {
+    var box = document.createElement("div");
+    box.className = "impact-line";
+    var body = el.querySelector("div");            // container ของ .t/.d
+    (body || el).appendChild(box);
+    impactRows.push({ cb: cb, box: box, kind: kind, key: key, volNote: volNote || "" });
+  }
+  function updateMeasureImpacts() {
+    if (!IVCompare.marginalOf) return;
+    var s = IVCompare.stats();
+    impactRows.forEach(function (row) {
+      if (!row.cb.checked) { row.box.style.display = "none"; return; }
+      if (!s || s.before.volume_m3 <= 0) {
+        row.box.innerHTML = '<i class="ti ti-droplet-off"></i> ยังไม่มีน้ำท่วมที่ระดับนี้ — กด <b>จำลองน้ำท่วม</b> เพื่อดูผลของมาตรการ';
+        row.box.style.display = "block";
+        return;
+      }
+      var m = IVCompare.marginalOf(row.kind, row.key);
+      if (!m) { row.box.style.display = "none"; return; }
+      var dv = Math.max(0, m.volume_m3), db = Math.max(0, m.buildings);
+      var pct = Math.round(dv / s.before.volume_m3 * 1000) / 10;
+      row.box.innerHTML = '<i class="ti ti-droplet-down"></i> ' + (row.volNote ? row.volNote + " · " : "") +
+        'ช่วยลดน้ำท่วม ~<b>' + fmt(dv) + ' ลบ.ม.</b> = <b>' + pct + '%</b> ของปริมาตรท่วม' +
+        (db > 0 ? ' · อาคารพ้นน้ำ ~<b>' + fmt(db) + ' หลัง</b>' : '') +
+        (dv <= 0 ? ' <span style="color:#64748b;">(ยังไม่เห็นผลเพิ่ม — น้ำระดับนี้มากเกินกว่ามาตรการนี้ หรือมาตรการอื่นที่เปิดอยู่คลุมพื้นที่แล้ว · ลองลดสไลเดอร์แม่น้ำ)</span>' : '');
+      row.box.style.display = "block";
+    });
+  }
+  function scheduleImpacts() { clearTimeout(impactTimer); impactTimer = setTimeout(updateMeasureImpacts, 200); }
+
   // toggle มาตรการเสริม (อัปเกรดสถานีสูบเดิม / ขุดลอกคลองเดิม) — จำลองผ่านความจุระบายของ engine
   function makeExtraToggle(kind, icon, color, title, desc, onChange) {
     var el = document.createElement("label");
@@ -136,6 +169,7 @@ window.IVViews = (function () {
       '<div><div class="t"><i class="ti ' + icon + '" style="color:' + color + ';"></i> ' + title + '</div>' +
       '<div class="d">' + desc + '</div></div>';
     var cb = el.querySelector("input");
+    attachImpact(el, cb, kind === "pumpup" ? "pump" : "dredge", 0);
     cb.addEventListener("change", function () {
       el.classList.toggle("on", cb.checked);
       if (IVViews.stopPlay) IVViews.stopPlay();
@@ -166,6 +200,7 @@ window.IVViews = (function () {
         (lv.newly_flooded != null ? '<br><span style="color:#b45309;"><i class="ti ti-scale"></i> No-Adverse-Impact: อาคารกระทบเพิ่ม ' + lv.newly_flooded + ' — ต้องยืนยัน HEC-RAS 2D</span>' : '') +
         '</div></div>';
       var cb = el.querySelector("input");
+      attachImpact(el, cb, "levee", lv.rank);
       cb.addEventListener("change", function () {
         el.classList.toggle("on", cb.checked);
         IVCompare.toggle(lv.rank, cb.checked);
@@ -255,6 +290,10 @@ window.IVViews = (function () {
         var cell = mr * NC + mc;
         var cb = el.querySelector("input");
         cb.dataset.kind = kind;
+        // บรรทัดผลรายมาตรการ: แก้มลิงโชว์ความจุบ่อ (mass-balance) · คอขวดโชว์ปริมาตรที่สูบ/ระบายเพิ่ม (screening)
+        if (kind === "retention") attachImpact(el, cb, "ret", cell, 'กักน้ำเข้าบ่อ ~<b>' + fmt(p.storage_m3 || 7200) + ' ลบ.ม.</b>');
+        else if (kind === "bottleneck") attachImpact(el, cb, "btl", cell, 'สูบ/ระบายเพิ่ม ~<b>12,000 ลบ.ม.</b>');
+        else attachImpact(el, cb, "gate", cell);
         cb.addEventListener("change", function () {
           el.classList.toggle("on", cb.checked);
           if (IVViews.stopPlay) IVViews.stopPlay();
@@ -302,6 +341,8 @@ window.IVViews = (function () {
       '<br><span style="color:#b45309;">ระบายน้ำฝนสะสม/น้ำท้องถิ่นออกจากเมือง — ขนาด/ความจุจริงต้อง HEC-RAS/SWMM</span></div></div>';
     var cb = el.querySelector("input");
     cb.dataset.kind = "canal";
+    var canalCap = routes.reduce(function (a, rt) { return a + rt.length_m * 6; }, 0);   // หน้าตัด ~6 ตร.ม./ม. (screening)
+    attachImpact(el, cb, "canal", 0, 'พาน้ำออก ~<b>' + fmt(canalCap) + ' ลบ.ม.</b>');
     cb.addEventListener("change", function () {
       el.classList.toggle("on", cb.checked);
       canalOn = cb.checked;
@@ -363,8 +404,8 @@ window.IVViews = (function () {
     IVCompare.subscribe(function (kind) {
       if (view === "2d") draw2D();
       if (mount3dFn && IV3D.onUpdate) IV3D.onUpdate(kind);
-      if (kind === "after") updateStats();
-      if (kind === "stage") { updateStats(); updateLevelReadout(); }
+      if (kind === "after") { updateStats(); scheduleImpacts(); }
+      if (kind === "stage") { updateStats(); updateLevelReadout(); scheduleImpacts(); }
     });
 
     // ---- อนิเมชัน "จำลองการท่วม": ไล่ระดับน้ำจากแห้ง → เป้าหมาย (น้ำแพร่ตามลำดับการท่วม) ----
