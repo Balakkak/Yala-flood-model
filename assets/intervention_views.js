@@ -69,21 +69,37 @@ window.IVViews = (function () {
   //  ทำให้ดูเหมือนน้ำถูกตัดด้วยโพลิกอน · แนวกำแพงจริง (เส้นเทา 2D / กำแพง 3D) + พื้นที่เขียว
   //  "แห้งลงหลังมีมาตรการ" สื่อผลป้องกันอยู่แล้ว)
 
-  // ---- หลอดผลรวม (การ์ดใต้ "วิธีวิเคราะห์"): มาตรการที่เปิดทั้งหมดรวมกันลดน้ำท่วมไปกี่ % ----
+  // ---- หลอดผลรวม (การ์ดใต้ "วิธีวิเคราะห์") — สเกล 100% ของปริมาตรน้ำท่วมก่อนมาตรการ:
+  //      ฝั่งซ้ายแดง = % ที่ยังท่วมอยู่ · ฝั่งขวาเขียว = % ที่มาตรการที่เปิดรวมกันลดได้ ----
   function updateTotalGauge(s, total) {
-    var fill = $("totFill"), pctEl = $("totPct"), cnt = $("totCount"), det = $("totDetail");
-    if (!fill || !s) return;
+    var red = $("totRed"), green = $("totGreen"), cnt = $("totCount"), det = $("totDetail");
+    if (!red || !s) return;
     var pct = Math.max(0, Math.min(100, s.reduced.volume_pct || 0));
     if (total === 0) pct = 0;
-    fill.style.width = pct + "%";
-    pctEl.textContent = pct + "%";
-    pctEl.style.color = pct > 0 ? "#047857" : "#94a3b8";
+    var flooded = s.before.volume_m3 > 0;
+    var remain = flooded ? Math.round((100 - pct) * 10) / 10 : 0;
+    red.style.width = (flooded ? remain : 0) + "%";
+    green.style.width = (flooded ? pct : 0) + "%";
+    $("totLeft").textContent = remain + "%";
+    $("totRight").textContent = pct + "%";
     cnt.textContent = total + " มาตรการ";
-    if (total === 0) det.innerHTML = 'ยังไม่เปิดมาตรการ — ติ๊กมาตรการด้านล่างเพื่อดูผลรวม';
-    else if (s.before.volume_m3 <= 0) det.innerHTML = 'ยังไม่มีน้ำท่วมที่ระดับนี้ — กด <b>จำลองน้ำท่วม</b> เพื่อดูผล';
+    if (!flooded) det.innerHTML = 'ยังไม่มีน้ำท่วมที่ระดับนี้ — กด <b>จำลองน้ำท่วม</b> เพื่อดูผล';
+    else if (total === 0) det.innerHTML = 'ยังไม่เปิดมาตรการ — ติ๊กมาตรการด้านล่างเพื่อดูผลรวม';
     else det.innerHTML = 'ลดปริมาตรน้ำท่วม ~<b>' + fmt(Math.max(0, s.reduced.volume_m3)) + ' ลบ.ม.</b>' +
       ' · อาคารพ้นน้ำ ~<b>' + fmt(Math.max(0, s.reduced.buildings)) + ' หลัง</b>' +
       ' · พื้นที่แห้งลง ~<b>' + fmt(Math.max(0, s.reduced.area_rai)) + ' ไร่</b>';
+  }
+
+  // ---- แถวมาตรการโชว์แค่ชื่อ — ปุ่มลูกศรมุมขวากางรายละเอียด (กันสับสนกับการติ๊ก) ----
+  function decorateRow(el) {
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "tog-more"; btn.title = "ดูรายละเอียดมาตรการ";
+    btn.innerHTML = '<i class="ti ti-chevron-down"></i>';
+    btn.addEventListener("click", function (e) {
+      e.preventDefault(); e.stopPropagation();   // อย่าให้ label ติ๊ก checkbox
+      el.classList.toggle("expanded");
+    });
+    el.appendChild(btn);
   }
 
   // ================= ผลของมาตรการ (ป้องกันได้เท่าไร เมื่อเทียบกับไม่มีโครงสร้าง) =================
@@ -188,6 +204,7 @@ window.IVViews = (function () {
       '<div class="d">' + desc + '</div></div>';
     var cb = el.querySelector("input");
     attachImpact(el, cb, kind === "pumpup" ? "pump" : "dredge", 0);
+    decorateRow(el);
     cb.addEventListener("change", function () {
       el.classList.toggle("on", cb.checked);
       if (IVViews.stopPlay) IVViews.stopPlay();
@@ -219,6 +236,7 @@ window.IVViews = (function () {
         '</div></div>';
       var cb = el.querySelector("input");
       attachImpact(el, cb, "levee", lv.rank);
+      decorateRow(el);
       cb.addEventListener("change", function () {
         el.classList.toggle("on", cb.checked);
         IVCompare.toggle(lv.rank, cb.checked);
@@ -312,6 +330,7 @@ window.IVViews = (function () {
         if (kind === "retention") attachImpact(el, cb, "ret", cell, 'กักน้ำเข้าบ่อ ~<b>' + fmt(p.storage_m3 || 7200) + ' ลบ.ม.</b>');
         else if (kind === "bottleneck") attachImpact(el, cb, "btl", cell, 'สูบ/ระบายเพิ่ม ~<b>12,000 ลบ.ม.</b>');
         else attachImpact(el, cb, "gate", cell);
+        decorateRow(el);
         cb.addEventListener("change", function () {
           el.classList.toggle("on", cb.checked);
           if (IVViews.stopPlay) IVViews.stopPlay();
@@ -361,6 +380,7 @@ window.IVViews = (function () {
     cb.dataset.kind = "canal";
     var canalCap = routes.reduce(function (a, rt) { return a + rt.length_m * 6; }, 0);   // หน้าตัด ~6 ตร.ม./ม. (screening)
     attachImpact(el, cb, "canal", 0, 'พาน้ำออก ~<b>' + fmt(canalCap) + ' ลบ.ม.</b>');
+    decorateRow(el);
     cb.addEventListener("change", function () {
       el.classList.toggle("on", cb.checked);
       canalOn = cb.checked;

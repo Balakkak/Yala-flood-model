@@ -76,24 +76,36 @@
     .cmp-side.b { left:14px; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
     .cmp-side.a { right:14px; background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; }
     /* การ์ดเปรียบเทียบ */
-    .struct-tog { display:flex; align-items:flex-start; gap:9px; padding:8px 10px; border:1px solid var(--line);
+    .struct-tog { position:relative; display:flex; align-items:flex-start; gap:9px; padding:8px 30px 8px 10px;
+      border:1px solid var(--line);
       border-radius:10px; margin-bottom:8px; cursor:pointer; transition:border-color .15s,background .15s; }
     .struct-tog.on { border-color:#0ea5e9; background:#f0f9ff; }
     .struct-tog input { margin-top:2px; accent-color:#0ea5e9; flex:0 0 auto; }
     .struct-tog .t { font-size:12px; font-weight:700; color:var(--ink-900); }
-    .struct-tog .d { font-size:10.5px; color:var(--ink-600); margin-top:2px; line-height:1.45; }
+    /* ค่าเริ่มต้นโชว์แค่ชื่อมาตรการ — รายละเอียดพับไว้ กดลูกศรมุมขวาเพื่อกาง (ลดความรก) */
+    .struct-tog .d { display:none; font-size:10.5px; color:var(--ink-600); margin-top:2px; line-height:1.45; }
+    .struct-tog.expanded .d { display:block; }
+    .tog-more { position:absolute; top:6px; right:5px; width:22px; height:22px; border:none; background:transparent;
+      color:var(--ink-400); cursor:pointer; border-radius:6px; display:grid; place-items:center; padding:0; }
+    .tog-more:hover { background:#e2e8f0; color:var(--ink-700); }
+    .tog-more .ti { font-size:14px; transition:transform .15s; }
+    .struct-tog.expanded .tog-more .ti { transform:rotate(180deg); }
     /* บรรทัดผลรายมาตรการ (โชว์เมื่อติ๊กเปิด): กัก/ระบายน้ำได้เท่าไร + ลดน้ำท่วมกี่ % */
     .struct-tog .impact-line { display:none; margin-top:5px; padding:5px 8px; border-radius:7px;
       background:#ecfdf5; border:1px solid #a7f3d0; font-size:10.5px; color:#065f46; line-height:1.55; }
     .struct-tog .impact-line b { color:#047857; }
     .struct-tog .impact-line .ti { font-size:12px; vertical-align:-2px; }
-    /* หลอดผลรวมการลดน้ำท่วมของมาตรการทั้งหมดที่เปิด (การ์ดใต้ "วิธีวิเคราะห์") */
-    .tot-row { display:flex; align-items:baseline; gap:8px; margin-bottom:6px; }
-    .tot-pct { font:800 22px 'Inter','Sarabun',sans-serif; color:#047857; }
-    .tot-cap { font-size:11px; color:var(--ink-600); }
-    .tot-bar { height:14px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
-    .tot-fill { height:100%; width:0; border-radius:999px; min-width:0;
-      background:linear-gradient(90deg,#38bdf8,#10b981); transition:width .35s ease; }
+    /* หลอดผลรวม (การ์ดใต้ "วิธีวิเคราะห์") — สเกล 100% ของปริมาตรน้ำท่วม:
+       ฝั่งซ้ายสีแดง = ส่วนที่ยังท่วม · ฝั่งขวาสีเขียว = ส่วนที่มาตรการลดได้ */
+    .tot-labs { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px;
+      font:600 11.5px 'Sarabun',sans-serif; }
+    .tl-red { color:#dc2626; } .tl-red b { font:800 15px 'Inter','Sarabun',sans-serif; }
+    .tl-green { color:#059669; } .tl-green b { font:800 15px 'Inter','Sarabun',sans-serif; }
+    .tot-bar { position:relative; height:14px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
+    .tot-red { position:absolute; left:0; top:0; bottom:0; width:100%;
+      background:linear-gradient(90deg,#f87171,#dc2626); transition:width .35s ease; }
+    .tot-green { position:absolute; right:0; top:0; bottom:0; width:0;
+      background:linear-gradient(90deg,#34d399,#059669); transition:width .35s ease; }
     .tot-detail { margin-top:7px; font-size:11px; color:var(--ink-600); line-height:1.5; }
     .tot-detail b { color:#047857; }
     .cmp-stats { display:grid; grid-template-columns:1fr; gap:7px; margin-top:4px; }
@@ -212,8 +224,11 @@
       <section class="card" style="margin-top:14px;">
         <div class="card-head"><i class="ti ti-chart-bar"></i><h2>ผลรวมมาตรการที่เปิด</h2><span class="sub" id="totCount">0 มาตรการ</span></div>
         <div class="card-body">
-          <div class="tot-row"><span class="tot-pct" id="totPct">0%</span><span class="tot-cap">ของปริมาตรน้ำท่วมที่ลดได้</span></div>
-          <div class="tot-bar"><div class="tot-fill" id="totFill"></div></div>
+          <div class="tot-labs">
+            <span class="tl-red"><i class="ti ti-droplet-filled"></i> ยังท่วม <b id="totLeft">100%</b></span>
+            <span class="tl-green">ลดได้ <b id="totRight">0%</b> <i class="ti ti-droplet-down"></i></span>
+          </div>
+          <div class="tot-bar"><div class="tot-red" id="totRed"></div><div class="tot-green" id="totGreen"></div></div>
           <div class="tot-detail" id="totDetail">ยังไม่เปิดมาตรการ — ติ๊กมาตรการด้านล่างเพื่อดูผลรวม</div>
         </div>
       </section>
