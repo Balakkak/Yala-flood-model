@@ -69,6 +69,23 @@ window.IVViews = (function () {
   //  ทำให้ดูเหมือนน้ำถูกตัดด้วยโพลิกอน · แนวกำแพงจริง (เส้นเทา 2D / กำแพง 3D) + พื้นที่เขียว
   //  "แห้งลงหลังมีมาตรการ" สื่อผลป้องกันอยู่แล้ว)
 
+  // ---- หลอดผลรวม (การ์ดใต้ "วิธีวิเคราะห์"): มาตรการที่เปิดทั้งหมดรวมกันลดน้ำท่วมไปกี่ % ----
+  function updateTotalGauge(s, total) {
+    var fill = $("totFill"), pctEl = $("totPct"), cnt = $("totCount"), det = $("totDetail");
+    if (!fill || !s) return;
+    var pct = Math.max(0, Math.min(100, s.reduced.volume_pct || 0));
+    if (total === 0) pct = 0;
+    fill.style.width = pct + "%";
+    pctEl.textContent = pct + "%";
+    pctEl.style.color = pct > 0 ? "#047857" : "#94a3b8";
+    cnt.textContent = total + " มาตรการ";
+    if (total === 0) det.innerHTML = 'ยังไม่เปิดมาตรการ — ติ๊กมาตรการด้านล่างเพื่อดูผลรวม';
+    else if (s.before.volume_m3 <= 0) det.innerHTML = 'ยังไม่มีน้ำท่วมที่ระดับนี้ — กด <b>จำลองน้ำท่วม</b> เพื่อดูผล';
+    else det.innerHTML = 'ลดปริมาตรน้ำท่วม ~<b>' + fmt(Math.max(0, s.reduced.volume_m3)) + ' ลบ.ม.</b>' +
+      ' · อาคารพ้นน้ำ ~<b>' + fmt(Math.max(0, s.reduced.buildings)) + ' หลัง</b>' +
+      ' · พื้นที่แห้งลง ~<b>' + fmt(Math.max(0, s.reduced.area_rai)) + ' ไร่</b>';
+  }
+
   // ================= ผลของมาตรการ (ป้องกันได้เท่าไร เมื่อเทียบกับไม่มีโครงสร้าง) =================
   function updateStats() {
     var s = IVCompare.stats(); if (!s) return;
@@ -81,6 +98,7 @@ window.IVViews = (function () {
     var res = $("protResult");
     res.style.display = "block";
     var total = nLevee + nInfo + nExtra + nCanal;
+    updateTotalGauge(s, total);
     if (total === 0) {
       res.className = "prot-result none";
       res.innerHTML = '<i class="ti ti-info-circle"></i> ยังไม่เปิดมาตรการ — น้ำท่วมเต็มตามระดับที่จำลอง';
