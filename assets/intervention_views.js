@@ -32,6 +32,7 @@ window.IVViews = (function () {
     var ar = IVCompare.arrays(), inStudy = ar.inStudy, chan = ar.chanMask;
     var st = IVCompare.getStage(), split = IVCompare.getSplit(), splitCol = split * NC;
     var drain = IVCompare.getDrain();     // ความจุระบายจากมาตรการที่เปิด (แก้มลิง/คอขวด) → ฝั่ง "หลัง"
+    var drain0 = IVCompare.getBaseDrain ? IVCompare.getBaseDrain() : null;   // ระบายเดิมของเมือง → ฝั่ง "ก่อน" (สอดคล้องสถิติ)
     // เปิดคันกั้นแล้วเมืองแห้ง → เกลี่ยน้ำฉากหลังนอกเขตให้ตื้น/จางเข้าหาเมือง (ไม่เป็นหน้าผาน้ำตรงเส้นเขต)
     var feather = IVCompare.ctxFeather ? IVCompare.ctxFeather() : null;
     var soften = feather && IVCompare.enabledCount() > 0;
@@ -52,12 +53,12 @@ window.IVViews = (function () {
       }
       var useBefore = c < splitCol;
       var arr = useBefore ? base[i] : after[i];
-      var dep = st - arr - (useBefore ? 0 : drain[i]);   // ฝั่งหลังหักความจุระบายของมาตรการที่เปิด
+      var dep = st - arr - (useBefore ? (drain0 ? drain0[i] : 0) : drain[i]);   // ทั้งสองฝั่งหักระบายเดิม · ฝั่งหลังหักของมาตรการเพิ่ม
       if (dep > 0.03) {
         var col = depthColor(dep);
         d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 205;
-      } else if (!useBefore && base[i] <= st) {
-        d[o] = 52; d[o + 1] = 211; d[o + 2] = 153; d[o + 3] = 150;   // แห้งลงหลังมีมาตรการ = เขียว
+      } else if (!useBefore && st - base[i] - (drain0 ? drain0[i] : 0) > 0.03) {
+        d[o] = 52; d[o + 1] = 211; d[o + 2] = 153; d[o + 3] = 150;   // ท่วมตอน "ก่อน" แต่แห้งเพราะมาตรการ = เขียว
       } else { d[o + 3] = 0; }
     }
     ctx.putImageData(img, 0, 0);
@@ -88,12 +89,12 @@ window.IVViews = (function () {
     }
     res.className = "prot-result";
     // ทุกมาตรการวัดผลจากโมเดลเดียวกัน: คันกั้นตัดเส้นทางน้ำ (connectivity) · มาตรการระบาย/หน่วง
-    // ลดความลึกเฉพาะจุดรอบรัศมีบริการ → รายงานอาคารพ้นน้ำ/ปริมาตรที่ลดจริงจากแบบจำลอง
+    // หักปริมาตรที่ดัก/ระบายได้ (mass-balance) ออกจากผืนน้ำท้ายน้ำที่จุดนั้นเชื่อมถึง
     var html = '<i class="ti ti-shield-check"></i> เปิด ' + total + ' มาตรการ · อาคารพ้นน้ำ <b>~' +
       fmt(s.reduced.buildings) + ' หลัง</b> · ลดปริมาตรน้ำท่วม <b>~' + s.reduced.volume_pct + '%</b>' +
       (nLevee > 0
         ? ' <span style="color:#64748b;">(คันกั้นตัดเส้นทางน้ำจากแม่น้ำ — แบบจำลอง connectivity)</span>'
-        : ' <span style="color:#64748b;">(ผลเฉพาะจุดรอบรัศมีบริการ — หน่วง/สูบ/ระบายน้ำท้องถิ่น · screening ต้องยืนยัน SWMM)</span>');
+        : ' <span style="color:#64748b;">(หักปริมาตรที่ดัก/ระบายได้ออกจากผืนน้ำท้ายน้ำที่มาตรการเชื่อมถึง — mass-balance screening · ต้องยืนยัน SWMM)</span>');
     // insight: มาตรการกลุ่มระบาย/หน่วงเห็นผลตามระดับน้ำ — เหตุการณ์ใหญ่ต้องมีคันกั้นเป็นหลักร่วม
     if (nLevee === 0) {
       var stgNow = IVCompare.getStage(), rgS = IVCompare.stageRange();

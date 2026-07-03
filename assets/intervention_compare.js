@@ -73,6 +73,62 @@ window.IVCompare = (function () {
     var d = currentDrain ? currentDrain[i] : (drainM ? drainM[i] : 0);
     return inStudy[i] && !chanMask[i] && arr[i] <= STAGE && (STAGE - arr[i] - d > 0.03);
   }
+  // เซลล์รับประโยชน์ "ท้ายน้ำ" ของมาตรการหน่วง/ระบาย — จุดดักน้ำ (แก้มลิง/คอขวด/ปลายคลอง)
+  // มักอยู่บนที่สูงที่น้ำแม่น้ำท่วมไม่ถึง (arrival > ระดับออกแบบ) → ถ้าวางวงบริการตรงหมุด
+  // จะไม่ทับพื้นที่ท่วมเลย = เปิดแล้วเห็นผล 0% เสมอ · จึงไล่ "เส้นทางน้ำ" (BFS ตาม arrival
+  // ไม่เกินของจุดตั้งต้น = ทางที่น้ำจากจุดนี้ไหลเชื่อมสู่แม่น้ำ) ไปยังเซลล์แรกที่ท่วมถึง
+  // เหตุการณ์ออกแบบ → ผลของมาตรการแสดงที่ย่านท้ายน้ำที่ได้ประโยชน์จริง
+  function downstreamFloodCell(start) {
+    if (start < 0 || start >= N || !valid[start]) return -1;
+    var target = FR ? FR.onset_stage_m + 0.3 : DESIGN_S;       // ถึงที่ราบน้ำท่วมหลัก/ทางน้ำ ไม่ใช่แค่ร่องบนที่สูง
+    if (chanMask[start] || baseArrival[start] <= target) return start;
+    var lim = baseArrival[start], seen = {}, q = [start], qh = 0, guard = 0;
+    seen[start] = 1;
+    var DR = [-1, 1, 0, 0, -1, -1, 1, 1], DC = [0, 0, -1, 1, -1, 1, -1, 1];
+    while (qh < q.length && guard++ < 8000) {
+      var cur = q[qh++];
+      if (chanMask[cur] || baseArrival[cur] <= target) return cur;
+      var r = (cur / NC) | 0, c = cur % NC;
+      for (var d = 0; d < 8; d++) {
+        var nr = r + DR[d], nc = c + DC[d];
+        if (nr < 0 || nc < 0 || nr >= NR || nc >= NC) continue;
+        var j = nr * NC + nc;
+        if (seen[j] || !valid[j] || baseArrival[j] > lim) continue;
+        seen[j] = 1; q.push(j);
+      }
+    }
+    return -1;                                                 // ไม่เชื่อมโซนท่วม (ไม่มีผลให้แสดง)
+  }
+  // กระจาย "ปริมาตรที่มาตรการดัก/ระบายได้" (ลบ.ม. — mass balance) เป็นความลึกที่ลดลง
+  // เริ่มจากจุดรับน้ำท้ายน้ำ ไล่ตามผืนน้ำที่เชื่อมต่อกัน ณ ระดับปัจจุบัน (ผ่านร่อง/ทางน้ำได้
+  // แต่ลดความลึกเฉพาะเซลล์เมืองนอกทางน้ำ) → น้ำระดับเริ่ม–กลาง: หย่อมแห้งชัดเจน ·
+  // เหตุการณ์ใหญ่: ผลเล็กตามจริง (ปริมาตรบ่อ/คลองเล็กมากเทียบปริมาตรน้ำแม่น้ำ)
+  function applyVolumeRelief(d, start, volM3) {
+    if (start < 0 || start >= N || !isFinite(volM3) || volM3 <= 0) return;
+    var arr = afterArrival || baseArrival;
+    var budget = volM3, seen = {}, q = [start], qh = 0;
+    seen[start] = 1;
+    var DR = [-1, 1, 0, 0], DC = [0, 0, -1, 1];
+    while (qh < q.length && budget > 0 && qh < 20000) {
+      var cur = q[qh++];
+      if (inStudy[cur] && !chanMask[cur]) {
+        var rem = STAGE - arr[cur] - d[cur];                   // ความลึกที่เหลือหลังหักระบายอื่น
+        if (rem > 0.03) {
+          var relief = Math.min(rem, budget / CELL_M2);
+          d[cur] += relief; budget -= relief * CELL_M2;
+        }
+      }
+      var r = (cur / NC) | 0, c = cur % NC;
+      for (var k = 0; k < 4; k++) {
+        var nr = r + DR[k], nc = c + DC[k];
+        if (nr < 0 || nc < 0 || nr >= NR || nc >= NC) continue;
+        var j = nr * NC + nc;
+        if (seen[j] || !valid[j]) continue;
+        if (!chanMask[j] && arr[j] > STAGE) continue;          // เดินเฉพาะผืนน้ำ/ทางน้ำที่เชื่อมกัน
+        seen[j] = 1; q.push(j);
+      }
+    }
+  }
   // จานวงกลมไล่ระดับ (ศูนย์กลางเต็ม peak → ขอบ 0) — "รัศมีบริการ" ของมาตรการเฉพาะจุด
   // วงกลม+ไล่ระดับ (ไม่ใช่สี่เหลี่ยมค่าคงที่) → น้ำรอบมาตรการแห้ง/ตื้นลงแบบเป็นธรรมชาติ มองเห็นผลชัด
   function addDrainDisk(d, r0, c0, rad, peak) {
@@ -90,14 +146,20 @@ window.IVCompare = (function () {
   function getActiveDrain() {
     var d = new Float32Array(N);
     if (drainM) { for (var i = 0; i < N; i++) d[i] = drainM[i]; }
+    // แก้มลิง/คอขวด/คลองใหม่ตั้งบนเส้นทางน้ำหลาก "ต้นทาง" ที่สูงกว่าระดับแม่น้ำท่วมถึง
+    // (arrival 19–26 ม. > เหตุการณ์ออกแบบ) → ลดความลึกตรงหมุดอย่างเดียวจะได้ 0% เสมอ
+    // จึงส่งผลเป็น "ปริมาตรที่ดัก/ระบายได้" ไปยังผืนน้ำท้ายน้ำที่จุดนั้นเชื่อมถึง (mass balance)
     retentionPonds.forEach(function (p) {
       if (!enabledRetention[p.cell]) return;
       for (var k = 0; k < p.cells.length; k++) { var idx = p.cells[k]; if (idx >= 0 && idx < N) d[idx] += 2.5; }
-      addDrainDisk(d, p.r, p.c, 6, 1.2);
+      if (p.eff === undefined) p.eff = downstreamFloodCell(p.cell);
+      applyVolumeRelief(d, p.eff, p.storage || 7200);          // บ่อดักได้เท่าความจุบ่อ
     });
     bottleneckList.forEach(function (b) {
       if (!enabledBottleneck[b.cell]) return;
-      addDrainDisk(d, b.r, b.c, 5, 1.2);
+      addDrainDisk(d, b.r, b.c, 5, 1.2);                       // แก้ท่วมขังรอบจุด (ถ้าน้ำถึง)
+      if (b.eff === undefined) b.eff = downstreamFloodCell(b.cell);
+      applyVolumeRelief(d, b.eff, 12000);                      // ท่อ/สูบเพิ่ม ~1 ลบ.ม./วิ ระบายรอบ ~3 ชม. (screening)
     });
     // สถานีสูบรับน้ำจากโครงข่ายท่อทั้งย่าน → รัศมีบริการ ~240 ม. (8 เซลล์) ต่อสถานี
     if (enabledPumpUpgrade) pumpCells.forEach(function (p) { addDrainDisk(d, p.r, p.c, 8, 1.0); });
@@ -106,6 +168,9 @@ window.IVCompare = (function () {
     if (enabledCanal) canalRoutes.forEach(function (rt) {
       for (var k3 = 0; k3 < rt.cells.length; k3++)
         addDrainDisk(d, (rt.cells[k3] / NC) | 0, rt.cells[k3] % NC, 2, 0.8);
+      // ปลายคลองเทลงทางน้ำ — ประโยชน์ = หน้าตัดคลอง (~6 ตร.ม./ม.) × ความยาว พาน้ำออกจากผืนท่วมที่เชื่อมถึง
+      if (rt.eff === undefined) rt.eff = downstreamFloodCell(rt.cells[rt.cells.length - 1]);
+      applyVolumeRelief(d, rt.eff, rt.length_m * 6);
     });
     return d;
   }
@@ -384,6 +449,7 @@ window.IVCompare = (function () {
     levees: function () { return levees; },
     stats: function () { return statsCache; },
     getDrain: getActiveDrain,
+    getBaseDrain: function () { return drainM; },   // ความจุระบายเดิมของเมือง (ไม่รวมมาตรการ) — ฝั่ง "ก่อน" ใช้
     // เปิด/ปิดมาตรการกายภาพรายจุด (key = เซลล์ศูนย์กลางที่ UI ส่งมา) → รันจำลองซ้ำ + ปล่อยอีเวนต์
     toggleRetention: function (cell, on) { enabledRetention[cell] = (on == null) ? !enabledRetention[cell] : !!on; computeAfter(); emit("after"); },
     toggleBottleneck: function (cell, on) { enabledBottleneck[cell] = (on == null) ? !enabledBottleneck[cell] : !!on; computeAfter(); emit("after"); },

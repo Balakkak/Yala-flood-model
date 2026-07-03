@@ -12,13 +12,13 @@ window.IV3D = (function () {
   var map = null, built = false, gl = null, meta;
   var positions, uvs, grounds, arrB, arrA, flowArr, indices, M2, N, NC, NR;
   var htmlMarkers = {};
-  var prog, vao, posB, uvB, gndB, arrBB, arrAB, flowB, drnB, fthB, idxB;
-  var aPos, aUv, aGnd, aArrB, aArrA, aFlow, aDrn, aFth, uMat, uTime, uM2, uStage, uSplit, uFlowOn, uFeatherOn;
+  var prog, vao, posB, uvB, gndB, arrBB, arrAB, flowB, drnB, drnBB2, fthB, idxB;
+  var aPos, aUv, aGnd, aArrB, aArrA, aFlow, aDrn, aDrnB, aFth, uMat, uTime, uM2, uStage, uSplit, uFlowOn, uFeatherOn;
   var t0 = performance.now();
   var stageCur = 18.25, stageTarget = 18.25, uSplitX = 0, flowOn = 1.0;
   var featherOn = 0.0;             // เปิดคันกั้น → เกลี่ยน้ำฉากหลังนอกเขตให้จางเข้าหาเมือง (กันหน้าผาน้ำตรงเส้นเขต)
   var afterBufferDirty = false;
-  var drains, drainArr, featherArr;
+  var drains, drainArr, drainBaseArr, featherArr;
 
   function mercXOf(lng) { return maplibregl.MercatorCoordinate.fromLngLat({ lng: lng, lat: 6.547 }, 0).x; }
 
@@ -30,8 +30,9 @@ window.IV3D = (function () {
     M2 = maplibregl.MercatorCoordinate.fromLngLat({ lng: 101.285, lat: 6.547 }, 0).meterInMercatorCoordinateUnits();
     positions = new Float32Array(N * 2); uvs = new Float32Array(N * 2);
     grounds = new Float32Array(N); arrB = new Float32Array(N); arrA = new Float32Array(N); flowArr = new Float32Array(N * 2);
-    drainArr = new Float32Array(N); featherArr = new Float32Array(N);
+    drainArr = new Float32Array(N); drainBaseArr = new Float32Array(N); featherArr = new Float32Array(N);
     var cf = IVCompare.ctxFeather ? IVCompare.ctxFeather() : null;
+    var drn0 = IVCompare.getBaseDrain ? IVCompare.getBaseDrain() : null;   // ระบายเดิม → ฝั่ง "ก่อน"
     for (var r = 0; r < NR; r++) for (var c = 0; c < NC; c++) {
       var i = r * NC + c, lng = meta.OLON + (c + 0.5) * meta.DLON, lat = meta.OLAT - (r + 0.5) * meta.DLAT;
       var p = maplibregl.MercatorCoordinate.fromLngLat({ lng: lng, lat: lat }, 0);
@@ -42,6 +43,7 @@ window.IV3D = (function () {
       arrA[i] = isFinite(A.after[i]) ? A.after[i] : ctxV;
       flowArr[i * 2] = ff.fx[i]; flowArr[i * 2 + 1] = ff.fy[i];      // ทิศไหลใน uv-space (u=ตอ., v=ใต้)
       drainArr[i] = drains[i];
+      drainBaseArr[i] = drn0 ? drn0[i] : 0;
       featherArr[i] = cf ? cf[i] : 1;
     }
     var idx = [];
@@ -51,13 +53,17 @@ window.IV3D = (function () {
     indices = new Uint32Array(idx);
   }
 
-  var VS = "attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;attribute float a_arrB;attribute float a_arrA;attribute vec2 a_flow;attribute float a_drain;attribute float a_feather;" +
+  var VS = "attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;attribute float a_arrB;attribute float a_arrA;attribute vec2 a_flow;attribute float a_drain;attribute float a_drainB;attribute float a_feather;" +
     "uniform mat4 u_matrix;uniform float u_time;uniform float u_m2;uniform float u_stage;uniform float u_split;uniform float u_flowOn;uniform float u_featherOn;" +
-    "varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_flow;void main(){" +
+    "varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_flow;varying float v_edge;void main(){" +
     "float arr=(a_pos.x < u_split)?a_arrB:a_arrA;" +              /* ซ้าย=ก่อน, ขวา=หลัง */
-    "float depth=(arr<=u_stage)?max(0.0,u_stage-a_ground-a_drain):0.0;" +
+    "float drn=(a_pos.x < u_split)?a_drainB:a_drain;" +           /* ก่อน=ระบายเดิม, หลัง=รวมมาตรการที่เปิด */
+    "float depth=(arr<=u_stage)?max(0.0,u_stage-a_ground-drn):0.0;" +
     "depth*=mix(1.0,a_feather,u_featherOn);" +                    /* เปิดคันกั้น → น้ำฉากหลังตื้นลงเข้าหาเมือง (ไม่เป็นหน้าผา) */
-    "depth*=smoothstep(0.0,0.08,min(min(a_uv.x,1.0-a_uv.x),min(a_uv.y,1.0-a_uv.y)));" + /* จางเข้าหาขอบกริด DEM (นุ่ม ~8% ของกริด) — กันผืนน้ำถูกตัดตรงขอบข้อมูล */
+    /* จางเข้าหาขอบกริด DEM (~8% ของกริด) — ส่งไปคูณ "alpha" ใน FS ด้วย (คูณแค่ depth ไม่พอ
+       เพราะ alpha มีค่าตั้งต้น ~0.42 ทันทีที่ depth>0.03 → ขอบยังตัดคม + foam ทำขอบขาว) */
+    "float ef=smoothstep(0.0,0.08,min(min(a_uv.x,1.0-a_uv.x),min(a_uv.y,1.0-a_uv.y)));" +
+    "depth*=ef;v_edge=ef;" +
     "float amp=clamp(depth*2.0,0.0,1.0);vec2 g=a_uv*48.0;" +
     "vec2 d1=vec2(0.30,0.95),d2=vec2(0.82,0.28),d3=vec2(-0.55,0.70);" +
     "float p1=dot(g,d1)+u_time*0.72;float p2=dot(g,d2)*1.5+u_time*0.50;float p3=dot(g,d3)*2.2+u_time*0.92;" +
@@ -68,7 +74,7 @@ window.IV3D = (function () {
     "w+=0.034*sin(pf)*fl*u_flowOn;gr+=0.034*cos(pf)*fdir*fl*u_flowOn;v_flow=fl*u_flowOn;" +
     "float surf=max(depth+w*amp,0.02);v_n=normalize(vec3(-gr*amp,1.0));v_depth=depth;v_uv=a_uv;" +
     "float z=(a_ground+surf)*u_m2;gl_Position=u_matrix*vec4(a_pos,z,1.0);}";
-  var FS = "precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_flow;uniform float u_time;void main(){" +
+  var FS = "precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_flow;varying float v_edge;uniform float u_time;void main(){" +
     "if(v_depth<0.03)discard;float dn=clamp(v_depth/2.5,0.0,1.0);" +
     "vec3 col=mix(vec3(0.32,0.64,0.82),vec3(0.02,0.18,0.42),dn);" +
     "vec3 N=normalize(v_n),V=vec3(0.0,0.0,1.0),L=normalize(vec3(0.55,0.35,0.78)),H=normalize(L+V);" +
@@ -76,7 +82,7 @@ window.IV3D = (function () {
     "col=mix(col,vec3(0.62,0.80,0.95),fres*0.55);col+=vec3(1.0,0.97,0.85)*spec*0.7;" +
     "float foam=(1.0-smoothstep(0.03,0.35,v_depth))*0.55;col=mix(col,vec3(0.92,0.97,1.0),foam*0.6);" +
     "col=mix(col,vec3(0.80,0.92,1.0),clamp(v_flow,0.0,1.0)*0.16);" +     /* ริ้วการไหล */
-    "float a=mix(0.42,0.9,dn)+spec*0.35+foam*0.25;gl_FragColor=vec4(col,clamp(a,0.0,0.96));}";
+    "float a=(mix(0.42,0.9,dn)+spec*0.35+foam*0.25)*v_edge;gl_FragColor=vec4(col,clamp(a,0.0,0.96));}";   /* ×v_edge → ผืนน้ำจางหายก่อนถึงขอบกริด ไม่ตัดเป็นเส้น */
 
   var waterLayer = {
     id: "iv-water3d", type: "custom", renderingMode: "3d",
@@ -87,17 +93,17 @@ window.IV3D = (function () {
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) console.error("iv-water link:", gl.getProgramInfoLog(prog));
       aPos = gl.getAttribLocation(prog, "a_pos"); aUv = gl.getAttribLocation(prog, "a_uv");
       aGnd = gl.getAttribLocation(prog, "a_ground"); aArrB = gl.getAttribLocation(prog, "a_arrB"); aArrA = gl.getAttribLocation(prog, "a_arrA"); aFlow = gl.getAttribLocation(prog, "a_flow");
-      aDrn = gl.getAttribLocation(prog, "a_drain"); aFth = gl.getAttribLocation(prog, "a_feather");
+      aDrn = gl.getAttribLocation(prog, "a_drain"); aDrnB = gl.getAttribLocation(prog, "a_drainB"); aFth = gl.getAttribLocation(prog, "a_feather");
       uMat = gl.getUniformLocation(prog, "u_matrix"); uTime = gl.getUniformLocation(prog, "u_time");
       uM2 = gl.getUniformLocation(prog, "u_m2"); uStage = gl.getUniformLocation(prog, "u_stage"); uSplit = gl.getUniformLocation(prog, "u_split"); uFlowOn = gl.getUniformLocation(prog, "u_flowOn");
       uFeatherOn = gl.getUniformLocation(prog, "u_featherOn");
       var mk = function (data, type) { var b = gl.createBuffer(); gl.bindBuffer(type || gl.ARRAY_BUFFER, b); gl.bufferData(type || gl.ARRAY_BUFFER, data, type ? gl.STATIC_DRAW : gl.DYNAMIC_DRAW); return b; };
       posB = mk(positions); uvB = mk(uvs); gndB = mk(grounds);
-      arrBB = mk(arrB); arrAB = mk(arrA); flowB = mk(flowArr); drnB = mk(drainArr); fthB = mk(featherArr);
+      arrBB = mk(arrB); arrAB = mk(arrA); flowB = mk(flowArr); drnB = mk(drainArr); drnBB2 = mk(drainBaseArr); fthB = mk(featherArr);
       idxB = mk(indices, gl.ELEMENT_ARRAY_BUFFER);
       vao = gl.createVertexArray(); gl.bindVertexArray(vao);
       var bind = function (b, loc, size) { gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0); };
-      bind(posB, aPos, 2); bind(uvB, aUv, 2); bind(gndB, aGnd, 1); bind(arrBB, aArrB, 1); bind(arrAB, aArrA, 1); bind(flowB, aFlow, 2); bind(drnB, aDrn, 1); bind(fthB, aFth, 1);
+      bind(posB, aPos, 2); bind(uvB, aUv, 2); bind(gndB, aGnd, 1); bind(arrBB, aArrB, 1); bind(arrAB, aArrA, 1); bind(flowB, aFlow, 2); bind(drnB, aDrn, 1); bind(drnBB2, aDrnB, 1); bind(fthB, aFth, 1);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxB); gl.bindVertexArray(null);
     },
     render: function (glc, mtxArg) {

@@ -7,7 +7,8 @@
   <title>โมเดล 3D เมืองยะลา · Yala 3D City</title>
   <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous"
+        onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css'">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/dist/tabler-icons.min.css" integrity="sha384-ccZHbezhtZWmNy0cg8odL0D/jFU5k5HIls9y78Qd6lWor7rpvFIZtK0fTFG4z456" crossorigin="anonymous">
   <style>
     html,body { margin:0; height:100%; font-family:'Sarabun',sans-serif; }
@@ -70,6 +71,8 @@
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
+<!-- unpkg ล่ม/โหลดพลาด → สลับไป jsdelivr (ไฟล์ npm เดียวกัน SRI เดิม) — กันหน้าขาวทั้งจอ -->
+<script>window.maplibregl||document.write('<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js" integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"><\/script>')</script>
 <script>
 const map = new maplibregl.Map({
   container: 'map',
@@ -153,14 +156,17 @@ async function buildScene() {
 
     const VS=`attribute vec2 a_pos;attribute vec2 a_uv;attribute float a_ground;
     uniform mat4 u_matrix;uniform sampler2D u_depth;uniform float u_time;uniform float u_m2;
-    varying float v_depth;varying vec3 v_n;varying vec2 v_uv;
-    void main(){float dm=texture2D(u_depth,a_uv).r*255.0;float depth=dm*0.1;float wet=depth>0.05?1.0:0.0;
+    varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_edge;
+    void main(){float dm=texture2D(u_depth,a_uv).r*255.0;float depth=dm*0.1;
+    /* จางเข้าหาขอบกริด DEM (~8%) — คูณทั้ง depth และ alpha (v_edge) กันผืนน้ำถูกตัดเป็นเส้นตรงตามขอบข้อมูล */
+    float ef=smoothstep(0.0,0.08,min(min(a_uv.x,1.0-a_uv.x),min(a_uv.y,1.0-a_uv.y)));
+    depth*=ef;v_edge=ef;float wet=depth>0.05?1.0:0.0;
     vec2 g=a_uv*110.0;vec2 d1=vec2(0.30,0.95),d2=vec2(0.80,0.30);          /* (ค) คลื่นไหลมีทิศ */
     float p1=dot(g,d1)+u_time*2.2;float p2=dot(g,d2)*1.6+u_time*1.4;
     float w=0.075*sin(p1)+0.045*sin(p2);vec2 gr=0.075*cos(p1)*d1+0.045*cos(p2)*d2*1.6;
     v_n=normalize(vec3(-gr*wet,1.0));v_depth=depth;v_uv=a_uv;
     float z=(a_ground+depth+w*wet)*u_m2;gl_Position=u_matrix*vec4(a_pos,z,1.0);}`;
-    const FS=`precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;uniform float u_time;
+    const FS=`precision highp float;varying float v_depth;varying vec3 v_n;varying vec2 v_uv;varying float v_edge;uniform float u_time;
     void main(){if(v_depth<0.05)discard;float dn=clamp(v_depth/2.5,0.0,1.0);
     vec3 col=mix(vec3(0.30,0.62,0.80),vec3(0.03,0.20,0.45),dn);
     vec3 N=normalize(v_n),V=vec3(0.0,0.0,1.0),L=normalize(vec3(0.55,0.35,0.78)),H=normalize(L+V);
@@ -171,7 +177,7 @@ async function buildScene() {
     float crest=smoothstep(0.55,1.0,sin(dot(v_uv*120.0,vec2(0.4,0.9))+u_time*3.0)*0.5+0.5);
     float foam=clamp(edge*0.8+crest*edge*0.6,0.0,1.0);
     col=mix(col,vec3(0.95,0.98,1.0),foam*0.7);
-    float a=mix(0.45,0.86,dn)+spec*0.5+foam*0.3;gl_FragColor=vec4(col,clamp(a,0.0,0.96));}`;
+    float a=(mix(0.45,0.86,dn)+spec*0.5+foam*0.3)*v_edge;gl_FragColor=vec4(col,clamp(a,0.0,0.96));}`;   /* ×v_edge → ผืนน้ำจางหายก่อนถึงขอบกริด */
 
     let prog,aPos,aUv,aGnd,uMat,uTime,uM2,uDepth,posB,uvB,gndB,idxB,tex,vao;
     const t0=performance.now();
