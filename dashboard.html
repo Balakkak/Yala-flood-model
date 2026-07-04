@@ -73,7 +73,7 @@
           <input type="range" id="sld" min="0" max="100" value="0" step="1" class="range-slider" />
           <div class="track-ticks" id="trackTicks"><span>0 ชม.</span><span>6</span><span>12</span><span>18</span><span>24 ชม.</span></div>
         </div>
-        <span id="tlab" class="time-label">ชม. 0</span>
+        <span id="tlab" class="time-label">0%</span>
       </div>
     </div>
 
@@ -83,7 +83,6 @@
       <!-- Simulation Controls -->
       <section class="card sim-card">
         <div class="card-head">
-          <i class="ti ti-sliders"></i>
           <h2>จำลองสถานการณ์น้ำท่วม</h2>
           <span class="sub">Simulation</span>
         </div>
@@ -97,39 +96,39 @@
               <span class="sim-cur-val"><span id="simRainfallVal">0</span><span class="sim-cur-unit"> mm/hr</span></span>
             </div>
             <div class="sim-track-wrap">
-              <input type="range" id="simRainfall" class="sim-slider" min="0" max="100" value="0" step="1" />
-              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .30)" data-warn="⚠ 30"></span>
+              <input type="range" id="simRainfall" class="sim-slider" min="0" max="500" value="0" step="1" />
+              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .06)" data-warn="⚠ 30"></span>
             </div>
-            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
+            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">125</span><span style="left:calc(9px + (100% - 18px) * .5)">250</span><span style="left:calc(9px + (100% - 18px) * .75)">375</span><span style="left:calc(100% - 9px)">500</span></div>
             <p class="sim-hint">≥ 30 mm/hr = เสี่ยงน้ำท่วมฉับพลัน</p>
           </div>
 
-          <!-- River level slider -->
+          <!-- River flow slider -->
           <div class="sim-row">
             <div class="sim-label-row">
-              <span class="sim-label-text"><i class="ti ti-wave-sine" style="font-size:13px;color:#0284c7;"></i> ระดับน้ำแม่น้ำปัตตานี</span>
-              <span class="sim-cur-val"><span id="simRiverVal">50</span><span class="sim-cur-unit"> %</span></span>
+              <span class="sim-label-text"><i class="ti ti-wave-sine" style="font-size:13px;color:#0284c7;"></i> อัตราการไหลแม่น้ำปัตตานี</span>
+              <span class="sim-cur-val"><span id="simRiverVal">80</span><span class="sim-cur-unit"> m³/s</span></span>
             </div>
             <div class="sim-track-wrap">
-              <input type="range" id="simRiver" class="sim-slider" min="0" max="100" value="50" step="1" />
-              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .75)" data-warn="⚠ 75"></span>
+              <input type="range" id="simRiver" class="sim-slider" min="0" max="1200" value="80" step="5" />
+              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .4167)" data-warn="⚠ 500"></span>
             </div>
-            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
-            <p class="sim-hint">≥ 75% = น้ำเอ่อล้นตลิ่ง (+14.00 ม.รทก.)</p>
+            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">300</span><span style="left:calc(9px + (100% - 18px) * .5)">600</span><span style="left:calc(9px + (100% - 18px) * .75)">900</span><span style="left:calc(100% - 9px)">1200</span></div>
+            <p class="sim-hint">≥ 500 m³/s = ล้นตลิ่ง (สถานี X.40A ยะลา · +16.50 ม.รทก.)</p>
           </div>
 
-          <!-- Dam level slider -->
+          <!-- Dam release slider -->
           <div class="sim-row">
             <div class="sim-label-row">
-              <span class="sim-label-text"><i class="ti ti-dam" style="font-size:13px;color:#0284c7;"></i> ระดับน้ำเขื่อนบางลาง</span>
-              <span class="sim-cur-val"><span id="simDamLevelVal">50</span><span class="sim-cur-unit"> %</span></span>
+              <span class="sim-label-text"><i class="ti ti-dam" style="font-size:13px;color:#0284c7;"></i> อัตราระบายเขื่อนบางลาง</span>
+              <span class="sim-cur-val"><span id="simDamLevelVal">60</span><span class="sim-cur-unit"> m³/s</span></span>
             </div>
             <div class="sim-track-wrap">
-              <input type="range" id="simDamLevel" class="sim-slider" min="0" max="100" value="50" step="1" />
-              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .90)" data-warn="⚠ 90"></span>
+              <input type="range" id="simDamLevel" class="sim-slider" min="0" max="400" value="60" step="5" />
+              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .5)" data-warn="⚠ 200"></span>
             </div>
-            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">25</span><span style="left:calc(9px + (100% - 18px) * .5)">50</span><span style="left:calc(9px + (100% - 18px) * .75)">75</span><span style="left:calc(100% - 9px)">100</span></div>
-            <p class="sim-hint">≥ 90% = เสี่ยงระบายฉุกเฉิน (+9 ชม. ถึงเมือง)</p>
+            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">100</span><span style="left:calc(9px + (100% - 18px) * .5)">200</span><span style="left:calc(9px + (100% - 18px) * .75)">300</span><span style="left:calc(100% - 9px)">400</span></div>
+            <p class="sim-hint">≥ 200 m³/s = ระบายมาก น้ำถึงเมืองใน ~9 ชม.</p>
           </div>
 
           <!-- Simulation duration -->
@@ -149,10 +148,10 @@
           <div class="sim-river-box">
             <div class="sim-river-head">
               <span><i class="ti ti-wave-sine" style="font-size:12px;"></i> สถานะแม่น้ำปัตตานี</span>
-              <span id="simRiverLevel" class="sim-river-val">ต่ำ — ปลอดภัย (30%)</span>
+              <span id="simRiverLevel" class="sim-river-val">ต่ำ — ปลอดภัย (80 m³/s)</span>
             </div>
             <div class="sim-river-track">
-              <div id="simRiverBar" class="sim-river-fill" style="width:30%;"></div>
+              <div id="simRiverBar" class="sim-river-fill" style="width:7%;"></div>
             </div>
           </div>
 

@@ -201,11 +201,7 @@ window.IVViews = (function () {
       el.classList.toggle("on", cb.checked);
       if (IVViews.stopPlay) IVViews.stopPlay();
       onChange(cb.checked);
-      // เปิดตอนยังแห้ง → ยกระดับเป็นเหตุการณ์ออกแบบ เพื่อให้เห็นผล "ลดน้ำท่วม"
-      if (cb.checked && applyLevelFn) {
-        var s = IVCompare.getStage(), rg = IVCompare.stageRange();
-        if (s <= rg.min + 0.05) { $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevelFn(); }
-      }
+
     });
     return el;
   }
@@ -235,13 +231,7 @@ window.IVViews = (function () {
         if (window.toggleLayerVisibility) {
           window.toggleLayerVisibility('levee', cb.checked);
         }
-        if (cb.checked && applyLevelFn) {
-          var s = IVCompare.getStage(), rg = IVCompare.stageRange();
-          if (s <= rg.min + 0.05) {
-            $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100;
-            applyLevelFn();
-          }
-        }
+
         if (view === "2d" && lmap) lmap.panInsideBounds && fitToActive();
       });
       host.appendChild(el);
@@ -331,11 +321,6 @@ window.IVViews = (function () {
           else if (kind === "bottleneck") IVCompare.toggleBottleneck(cell, cb.checked);
           else if (kind === "floodgate") IVCompare.toggleFloodgate(cell, cb.checked);
           if (window.toggleLayerVisibility) window.toggleLayerVisibility(kind, cb.checked);
-          // เปิดมาตรการตอนยังแห้งอยู่ → ยกระดับเป็นเหตุการณ์ออกแบบ เพื่อให้เห็นผล "ลดน้ำท่วม"
-          if (cb.checked && applyLevelFn) {
-            var s = IVCompare.getStage(), rg = IVCompare.stageRange();
-            if (s <= rg.min + 0.05) { $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevelFn(); }
-          }
           if (cb.checked) focusPoint(lng, lat);
         });
         wrap.appendChild(el);
@@ -381,11 +366,6 @@ window.IVViews = (function () {
       else if (lmap) canalLayer.removeFrom(lmap);
       if (IV3D.toggleCanal) IV3D.toggleCanal(cb.checked);
       if (IVCompare.toggleCanalDrain) IVCompare.toggleCanalDrain(cb.checked);   // คลองมีผลระบายจริงตามแนว
-      // เปิดตอนยังแห้ง → ยกระดับเป็นเหตุการณ์ออกแบบ
-      if (cb.checked && applyLevelFn) {
-        var s = IVCompare.getStage(), rg = IVCompare.stageRange();
-        if (s <= rg.min + 0.05) { $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevelFn(); }
-      }
       updateStats();                                     // นับรวมคลองในสรุปมาตรการ
       if (cb.checked && routes[0]) focusPoint(routes[0].from.lng, routes[0].from.lat);
     });
@@ -444,26 +424,58 @@ window.IVViews = (function () {
       if (playTimer) { clearInterval(playTimer); playTimer = null; }
       var btn = $("btnPlayFlood");
       if (btn) { btn.classList.remove("playing"); btn.innerHTML = '<i class="ti ti-droplet-filled-2"></i> จำลองน้ำท่วม'; }
+      var tlBtn = $("tlPlay"), tlIco = tlBtn ? tlBtn.querySelector("i") : null, tlTxt = $("tlPlayTxt");
+      if (tlBtn) tlBtn.classList.remove("playing");
+      if (tlIco) tlIco.className = "ti ti-player-play";
+      if (tlTxt) tlTxt.textContent = "เล่นจำลองน้ำท่วม";
     }
     IVViews.stopPlay = stopPlay;   // expose เพื่อให้ chkLevee handler หยุด animation ก่อนเปลี่ยนระดับน้ำ
     function playFlood() {
       if (playTimer) { stopPlay(); return; }
       var rng = IVCompare.stageRange();
       var base = rng.min, target = IVCompare.stageFromInputs(+$("sRain").value, +$("sRiver").value, +$("sDam").value);
-      var steps = 28, step = 0;
+      var tlSld = $("tlSld"), tlPct = $("tlPct");
+      var steps = 100, step = tlSld ? +tlSld.value : 0;
+      if (step >= steps) step = 0;
+      
       var btn = $("btnPlayFlood");
       if (btn) { btn.classList.add("playing"); btn.innerHTML = '<i class="ti ti-square-filled"></i> หยุด'; }
-      IVCompare.setStage(base);
+      var tlBtn = $("tlPlay"), tlIco = tlBtn ? tlBtn.querySelector("i") : null, tlTxt = $("tlPlayTxt");
+      if (tlBtn) tlBtn.classList.add("playing");
+      if (tlIco) tlIco.className = "ti ti-player-pause";
+      if (tlTxt) tlTxt.textContent = "หยุด";
+      
+      if (step === 0) IVCompare.setStage(base);
       playTimer = setInterval(function () {
-        step++;
+        step += 2; // Move 2% per tick (50 ticks * 100ms = 5s total)
+        if (step > steps) step = steps;
         IVCompare.setStage(base + (target - base) * (step / steps));
+        if (tlSld) tlSld.value = step;
+        if (tlPct) tlPct.textContent = step + "%";
         if (step >= steps) stopPlay();
-      }, 250);
+      }, 100);
     }
 
     ["sRain", "sRiver", "sDam"].forEach(function (id) { $(id).addEventListener("input", function () { stopPlay(); applyLevel(); }); });
-    $("btnDesignEvent").addEventListener("click", function () { stopPlay(); $("sRain").value = 40; $("sRiver").value = 100; $("sDam").value = 100; applyLevel(); });
+    $("btnDesignEvent").addEventListener("click", function () { stopPlay(); $("sRain").value = 40; $("sRiver").value = 700; $("sDam").value = 300; applyLevel(); });
     $("btnPlayFlood").addEventListener("click", playFlood);
+    
+    var tlSld = $("tlSld"), tlPlay = $("tlPlay"), bReset2 = $("bReset2"), tlPct = $("tlPct");
+    if (tlPlay) tlPlay.addEventListener("click", playFlood);
+    if (tlSld) tlSld.addEventListener("input", function() {
+      stopPlay();
+      var rng = IVCompare.stageRange();
+      var base = rng.min, target = IVCompare.stageFromInputs(+$("sRain").value, +$("sRiver").value, +$("sDam").value);
+      var step = +this.value;
+      IVCompare.setStage(base + (target - base) * (step / 100));
+      if (tlPct) tlPct.textContent = step + "%";
+    });
+    if (bReset2) bReset2.addEventListener("click", function() {
+      stopPlay();
+      if (tlSld) tlSld.value = 0;
+      if (tlPct) tlPct.textContent = "0%";
+      IVCompare.setStage(IVCompare.stageRange().min);
+    });
     $("togFlow").addEventListener("change", function () { if (IV3D.setFlow) IV3D.setFlow(this.checked); });
 
     // ---- ดึงค่าจริง (เขื่อน/ฝน) เหมือนหน้า 3D ----
@@ -471,12 +483,12 @@ window.IVViews = (function () {
     if (bLive) bLive.addEventListener("click", function () {
       bLive.disabled = true; bLive.innerHTML = '<i class="ti ti-loader"></i> กำลังดึง...';
       Promise.resolve(window.YalaLive ? YalaLive.fetchLive() : { data: null }).then(function (rep) {
-        var dam = rep && rep.data ? rep.data.storage : null, rain = rep && rep.data ? rep.data.rainfall : null;
-        if (dam != null) $("sDam").value = Math.round(dam);
-        if (rain != null) $("sRain").value = Math.min(100, Math.max(0, Math.round(rain)));
+        var dam = rep && rep.data ? rep.data.released : null, rain = rep && rep.data ? rep.data.rainfall : null;   // อัตราระบายจริง (m³/s)
+        if (dam != null) $("sDam").value = Math.min(400, Math.max(0, Math.round(dam)));
+        if (rain != null) $("sRain").value = Math.min(500, Math.max(0, Math.round(rain)));
         stopPlay(); applyLevel();
         liveStatus.innerHTML = (dam != null || rain != null)
-          ? 'ค่าจริง · เขื่อน ' + (dam != null ? dam.toFixed(0) + '%' : '–') + ' · ฝน ' + (rain != null ? rain.toFixed(1) + ' mm/hr' : '–') + ' → กด "จำลองการท่วม"'
+          ? 'ค่าจริง · เขื่อนระบาย ' + (dam != null ? dam.toFixed(0) + ' m³/s' : '–') + ' · ฝน ' + (rain != null ? rain.toFixed(1) + ' mm/hr' : '–') + ' → กด "จำลองการท่วม"'
           : 'ดึงค่าจริงไม่ได้ — ปรับสไลเดอร์เองได้';
       }).catch(function () { liveStatus.textContent = 'ดึงค่าจริงไม่ได้ — ปรับสไลเดอร์เองได้'; })
         .then(function () { bLive.disabled = false; bLive.innerHTML = '<i class="ti ti-rss"></i> ดึงค่าปัจจุบันจริง'; });
@@ -486,9 +498,9 @@ window.IVViews = (function () {
     (function restoreFromSim() {
       var s = null; try { s = JSON.parse(localStorage.getItem("yalaSim") || "null"); } catch (e) {}
       if (!s) return;
-      if (s.rain != null) $("sRain").value = s.rain;
-      if (s.river != null) $("sRiver").value = s.river;
-      if (s.dam != null) $("sDam").value = s.dam;
+      if (s.rain != null) { $("sRain").value = s.rain; $("vRain").textContent = s.rain; }
+      if (s.river != null) { $("sRiver").value = s.river; $("vRiver").textContent = s.river; }
+      if (s.dam != null) { $("sDam").value = s.dam; $("vDam").textContent = s.dam; }
       var note = $("simNote"); if (note) note.style.display = "flex";
     })();
     // เริ่มด้วยสภาวะแห้ง (ไม่โหลดค่าน้ำท่วมจาก localStorage) — ผู้ใช้กด "จำลองน้ำท่วม" เพื่อเริ่ม
