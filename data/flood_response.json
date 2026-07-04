@@ -13,10 +13,20 @@
     "dam_max_m": 0.66,
     "dam_onset_pct": 70.0,
     "normal_baseline": {
-      "river": 50,
+      "river": 80,
       "rain": 0,
       "dam": 60
     }
+  },
+  "flow": {
+    "_doc": "อัตราการไหลจริง สถานี X.40A บ้านท่าสาป อ.เมืองยะลา (ศูนย์อุทกวิทยาชลประทานภาคใต้ กรมชลประทาน). bankfull≈ล้นตลิ่ง +16.50 ม.รทก. · ธ.ค.63: +0.60ม.=656 · ม.ค.64: +2.13ม.=1015 ลบ.ม./วินาที",
+    "river_bankfull_cms": 500,
+    "river_major_cms": 1015,
+    "river_max_cms": 1200,
+    "river_default_cms": 80,
+    "dam_max_cms": 400,
+    "dam_warn_cms": 200,
+    "dam_default_cms": 60
   },
   "onset_thresholds": {
     "river_pct": 75.0,

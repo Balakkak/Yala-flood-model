@@ -254,18 +254,18 @@
           <button id="btnLive" class="lvl-live"><i class="ti ti-rss"></i> ดึงค่าปัจจุบันจริง</button>
           <div class="lvl-livestatus" id="liveStatus">เขื่อนบางลาง + ฝนยะลา (ThaiWater · Open-Meteo)</div>
           <div class="lvl-row"><span class="lvl-lab"><i class="ti ti-cloud-rain"></i> ฝน</span>
-            <input type="range" id="sRain" min="0" max="100" value="40"><span class="lvl-val" id="vRain">40</span></div>
-          <div class="lvl-row"><span class="lvl-lab"><i class="ti ti-ripple"></i> แม่น้ำ</span>
-            <input type="range" id="sRiver" min="0" max="100" value="95"><span class="lvl-val" id="vRiver">95</span></div>
-          <div class="lvl-row"><span class="lvl-lab"><i class="ti ti-wall"></i> เขื่อน</span>
-            <input type="range" id="sDam" min="0" max="100" value="90"><span class="lvl-val" id="vDam">90</span></div>
+            <input type="range" id="sRain" min="0" max="500" value="40"><span class="lvl-val" id="vRain">40</span></div>
+          <div class="lvl-row"><span class="lvl-lab"><i class="ti ti-ripple"></i> แม่น้ำ <small style="opacity:.6">m³/s</small></span>
+            <input type="range" id="sRiver" min="0" max="1200" value="700" step="5"><span class="lvl-val" id="vRiver">700</span></div>
+          <div class="lvl-row"><span class="lvl-lab"><i class="ti ti-wall"></i> เขื่อนระบาย <small style="opacity:.6">m³/s</small></span>
+            <input type="range" id="sDam" min="0" max="400" value="300" step="5"><span class="lvl-val" id="vDam">300</span></div>
           <div style="display:flex;gap:7px;align-items:center;margin-top:9px;flex-wrap:wrap;">
             <button id="btnDesignEvent" class="lvl-preset"><i class="ti ti-target"></i> เหตุการณ์ออกแบบ</button>
             <label class="lvl-flow"><input type="checkbox" id="togFlow" checked> <i class="ti ti-wind"></i> ริ้วการไหล (3D)</label>
           </div>
           <button id="btnPlayFlood" class="lvl-play"><i class="ti ti-droplet-filled-2"></i> จำลองน้ำท่วม</button>
           <p style="margin:8px 0 0;font-size:10.5px;color:var(--ink-500);line-height:1.5;">
-            กด <b>จำลองน้ำท่วม</b> เพื่อดูน้ำท่วมสถานการณ์ออกแบบ (แม่น้ำ+เขื่อน 100%) · <b>เปิดคันกั้นก่อนกด</b> เพื่อเปรียบเทียบพื้นที่ที่ป้องกันได้ (สีเขียว)</p>
+            กด <b>จำลองน้ำท่วม</b> เพื่อดูน้ำท่วมสถานการณ์ออกแบบ (ไหลรวม ~1,000 m³/s = น้ำท่วมใหญ่ ม.ค.64) · <b>เปิดคันกั้นก่อนกด</b> เพื่อเปรียบเทียบพื้นที่ที่ป้องกันได้ (สีเขียว)</p>
         </div>
       </section>
 
@@ -286,6 +286,17 @@
           · แต่ละหมุดกดดู <b>องค์ประกอบที่ต้องมีตามมาตรฐาน</b> ได้</span>
       </div>
     </aside>
+  </div>
+
+  <!-- แถบเวลาด้านล่าง (เหมือนหน้า 2D) -->
+  <div class="timeline">
+    <button id="tlPlay" class="btn-play"><i class="ti ti-player-play" style="font-size:16px;"></i> <span id="tlPlayTxt">เล่นจำลองน้ำท่วม</span></button>
+    <button id="bReset2" class="btn-drain" title="น้ำลด"><i class="ti ti-trending-down" style="font-size:15px;"></i> น้ำลด</button>
+    <div class="track">
+      <input type="range" id="tlSld" min="0" max="100" value="0" step="1" class="range-slider">
+      <div class="track-ticks"><span>0 ชม.</span><span>6</span><span>12</span><span>18</span><span>24 ชม.</span></div>
+    </div>
+    <span id="tlPct" class="time-label">0%</span>
   </div>
 </div>
 

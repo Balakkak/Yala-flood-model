@@ -46,7 +46,7 @@
   let scenario = "base";
 
   // --- Simulation inputs (from user sliders) ---
-  let simInputs = { rainfall: 0, damLevel: 50, river: 50 };
+  let simInputs = { rainfall: 0, damLevel: 60, river: 80 };   // damLevel/river = อัตราการไหล m³/s
   let _lastSimDrainage = false;
 
   // --- Rain zone state ---
@@ -416,7 +416,7 @@
     if (!_baseSources) return;
     // รวม drainage/sewer เป็น flood source เมื่อวิกฤต (น้ำย้อนจากท่อระบาย)
     const useDrainage = scenario === 'high' ||
-      (scenario === 'custom' && (simInputs.damLevel >= 80 || computeFloodIntensity() >= 0.65));
+      (scenario === 'custom' && (simInputs.damLevel >= 200 || computeFloodIntensity() >= 0.65));   // ระบายเขื่อน ≥ 200 m³/s = ท้ายน้ำเสี่ยง
     if (useDrainage && cityDrainageGlobal) {
       buildModel([..._baseSources, cityDrainageGlobal].filter(Boolean));
     } else {
@@ -448,10 +448,11 @@
   // คำนวณ flood intensity [0–1] จาก rainfall + dam level
   function computeFloodIntensity() {
     // แม่น้ำเป็นตัวขับหลัก (ล้นตลิ่ง) · ฝน+เขื่อนเสริม — ให้สอดคล้องกับโมเดล 3D
+    const FL = (FR && FR.flow) || { river_bankfull_cms: 500 };
     const rainNorm  = Math.min(simInputs.rainfall / 80, 1); // 80 mm/hr = peak
-    const damNorm   = Math.min(simInputs.damLevel  / 100, 1);
-    const riverNorm = Math.min((simInputs.river != null ? simInputs.river : 50) / 100, 1);
-    return Math.min(riverNorm * 0.45 + rainNorm * 0.35 + damNorm * 0.20, 1);
+    // อัตราไหลรวม (แม่น้ำ+ระบายเขื่อน) เทียบความจุลำน้ำ (bankfull) — เขื่อนอยู่เหนือน้ำจึงบวกกันตรง ๆ
+    const flowNorm  = Math.min((Math.max(0, simInputs.river) + Math.max(0, (simInputs.damLevel != null ? simInputs.damLevel : 0))) / FL.river_bankfull_cms, 1);
+    return Math.min(flowNorm * 0.65 + rainNorm * 0.35, 1);
   }
 
   function scenarioNameForIntensity(intensity) {
@@ -470,12 +471,16 @@
   function frStageOf(rain, river, dam) {
     if (!FR) return null;
     var M = FR.mapping, onsetRise = FR.onset_stage_m - FR.base_stage_m;
-    var rr = (river <= M.river_bankfull_pct)
-      ? onsetRise * (river / M.river_bankfull_pct)
-      : onsetRise + (river - M.river_bankfull_pct) / (100 - M.river_bankfull_pct) * M.river_extra_m;
-    var rn = M.rain_max_m * Math.pow(Math.min(1, Math.max(0, rain) / 100), 0.85);
-    var dm = (dam <= M.dam_onset_pct) ? 0 : M.dam_max_m * (dam - M.dam_onset_pct) / (100 - M.dam_onset_pct);
-    return Math.min(FR.base_stage_m + rr + rn + dm, FR.base_stage_m + FR.event_rise_m + 0.5);
+    var FL = FR.flow || { river_bankfull_cms: 500, river_major_cms: 1015 };
+    var QBANK = FL.river_bankfull_cms, QMAJ = FL.river_major_cms;
+    // อัตราไหลรวมที่ยะลา = แม่น้ำ(baseline) + ระบายเขื่อน (m³/s) — ไม่นับซ้ำ เพราะเขื่อนอยู่เหนือน้ำ
+    var Q = Math.max(0, river) + Math.max(0, dam);
+    var rr = Q <= QBANK ? onsetRise * (Q / QBANK)
+      : onsetRise + Math.min((Q - QBANK) / (QMAJ - QBANK), 1.3) * M.river_extra_m;
+    // 0–100 mm/hr: เหมือนเดิม (คาลิเบรตไว้) · >100 ถึง 500: ฝนสุดขั้ว น้ำสูงเพิ่มแบบเชิงเส้น (ถูกจำกัดด้วยเพดาน stage ด้านล่าง)
+    rain = Math.max(0, rain);
+    var rn = M.rain_max_m * (Math.pow(Math.min(1, rain / 100), 0.85) + Math.max(0, rain - 100) / 100 * 0.4);
+    return Math.min(FR.base_stage_m + rr + rn, FR.base_stage_m + FR.event_rise_m + 0.5);
   }
   function frCurveAt(stage) {
     var cv = FR && FR.curve; if (!cv || !cv.length) return null;
@@ -506,7 +511,9 @@
   // หา "ค่าต่ำสุดของตัวขับหนึ่ง" ที่ทำให้เริ่มท่วม (ตรึงอีกสองตัว) — เหมือนหน้า 3D
   function threshFor(driver, rain, river, dam) {
     if (!FR) return null;
-    for (var v = 0; v <= 200; v += 0.5) {
+    var FL = FR.flow || { river_max_cms: 1200, dam_max_cms: 400 };
+    var mx = driver === 'rain' ? 500 : (driver === 'river' ? FL.river_max_cms : FL.dam_max_cms), stp = driver === 'rain' ? 1 : 5;
+    for (var v = 0; v <= mx; v += stp) {
       var a = { rain: rain, river: river, dam: dam }; a[driver] = v;
       if (frStageOf(a.rain, a.river, a.dam) >= frOnset - 1e-6) return v;
     }
@@ -533,9 +540,9 @@
         (near ? 'เฝ้าระวัง — ใกล้ท่วม' : 'ยังไม่ท่วม') + ' (อีก <b>' + (-margin).toFixed(2) + ' ม.</b> ถึงเกณฑ์)</span>';
       var tR = threshFor('river', rain, river, dam), tN = threshFor('rain', rain, river, dam), tD = threshFor('dam', rain, river, dam);
       var parts = [];
-      if (tR != null && tR <= 100) parts.push('แม่น้ำ ≥ <b>' + Math.round(tR) + '%</b>');
-      if (tN != null && tN <= 200) parts.push('ฝน ≥ <b>' + Math.round(tN) + ' มม./ชม.</b>');
-      if (tD != null && tD <= 100) parts.push('เขื่อน ≥ <b>' + Math.round(tD) + '%</b>');
+      if (tR != null) parts.push('แม่น้ำ ≥ <b>' + Math.round(tR) + ' m³/s</b>');
+      if (tN != null) parts.push('ฝน ≥ <b>' + Math.round(tN) + ' มม./ชม.</b>');
+      if (tD != null) parts.push('เขื่อนระบาย ≥ <b>' + Math.round(tD) + ' m³/s</b>');
       if (elTh) elTh.innerHTML = parts.length ? ('เริ่มท่วมเมื่อ (ที่ค่าอื่นปัจจุบัน): ' + parts.join(' หรือ ')) : '';
     }
   }
@@ -561,7 +568,7 @@
     }
 
     const prevScenario  = scenario;
-    const usesDrainage  = simInputs.damLevel >= 80 || intensity >= 0.65;
+    const usesDrainage  = simInputs.damLevel >= 200 || intensity >= 0.65;   // ระบายเขื่อน ≥ 200 m³/s
     scenario = 'custom';
     t = 0;
     if (sld) sld.value = 0;
@@ -609,17 +616,18 @@
   function schedulePreview() { clearTimeout(_previewTimer); _previewTimer = setTimeout(previewSim, 140); }
 
   // อัปเดตกล่อง "สถานะแม่น้ำปัตตานี" (แถบ+ป้าย) ให้ตรงกับค่าสไลเดอร์แม่น้ำ
-  function updateRiverBox(pct) {
-    pct = Math.round(pct);
+  function updateRiverBox(q) {
+    q = Math.round(q);
+    const FL = (FR && FR.flow) || { river_max_cms: 1200 };
     const riverBar   = document.getElementById('simRiverBar');
     const riverLabel = document.getElementById('simRiverLevel');
-    if (riverBar) riverBar.style.width = pct + '%';
+    if (riverBar) riverBar.style.width = Math.min(100, q / FL.river_max_cms * 100).toFixed(0) + '%';
     const rlabel =
-      pct < 42 ? 'ต่ำ — ปลอดภัย'      :
-      pct < 65 ? 'ปกติ'                 :
-      pct < 82 ? 'สูงกว่าปกติ'          :
-      pct < 93 ? 'ใกล้ระดับวิกฤต ⚠'   : 'ล้นตลิ่ง ⚠';
-    if (riverLabel) riverLabel.textContent = rlabel + ' (' + pct + '%)';
+      q < 200 ? 'ต่ำ — ปลอดภัย'   :
+      q < 380 ? 'ปกติ'             :
+      q < 500 ? 'สูงกว่าปกติ'      :
+      q < 680 ? 'ล้นตลิ่ง ⚠'      : 'ท่วมหนัก ⚠';
+    if (riverLabel) riverLabel.textContent = rlabel + ' (' + q + ' m³/s)';
   }
 
   function updateSimUI(intensity) {
@@ -1015,11 +1023,7 @@
     const BANGLONG_LAG_H = 9; // เขื่อนบางลาง → ยะลา ~80 กม. ที่ ~2.5 ม./วิ ≈ 9 ชม.
     const spreadH = Math.round(t * (SPREAD_HOURS[scenario] || 24));
     if (tlab) {
-      if (scenario === 'high' && latestRainfall !== null) {
-        tlab.textContent = "ชม. +" + (BANGLONG_LAG_H + spreadH) + " หลังระบาย";
-      } else {
-        tlab.textContent = "ชม. +" + spreadH + " หลังล้นตลิ่ง";
-      }
+      tlab.textContent = Math.round(t * 100) + "%";
     }
   }
 

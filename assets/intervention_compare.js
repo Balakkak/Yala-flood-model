@@ -520,13 +520,16 @@ window.IVCompare = (function () {
     stageFromInputs: function (rain, river, dam) {
       if (!FR) return STAGE;
       var M = FR.mapping, base = FR.base_stage_m, onsetRise = FR.onset_stage_m - FR.base_stage_m;
-      var cl = function (p) { return Math.max(0, Math.min(100, p)); };
-      river = cl(river); rain = Math.max(0, rain); dam = cl(dam);
-      var rRiver = river <= M.river_bankfull_pct ? onsetRise * (river / M.river_bankfull_pct)
-        : onsetRise + (river - M.river_bankfull_pct) / (100 - M.river_bankfull_pct) * M.river_extra_m;
-      var rRain = M.rain_max_m * Math.pow(Math.min(1, rain / 100), 0.85);
-      var rDam = dam <= M.dam_onset_pct ? 0 : M.dam_max_m * (dam - M.dam_onset_pct) / (100 - M.dam_onset_pct);
-      return Math.min(base + rRiver + rRain + rDam, base + FR.event_rise_m + 0.5);
+      var FL = FR.flow || { river_bankfull_cms: 500, river_major_cms: 1015 };
+      var QBANK = FL.river_bankfull_cms, QMAJ = FL.river_major_cms;
+      rain = Math.max(0, rain);
+      // อัตราไหลรวมที่ยะลา = แม่น้ำ(baseline) + ระบายเขื่อน (m³/s) — ไม่นับซ้ำ เพราะเขื่อนอยู่เหนือน้ำ
+      var Q = Math.max(0, river) + Math.max(0, dam);
+      var rFlow = Q <= QBANK ? onsetRise * (Q / QBANK)
+        : onsetRise + Math.min((Q - QBANK) / (QMAJ - QBANK), 1.3) * M.river_extra_m;
+      // 0–100 mm/hr: เหมือนเดิม (คาลิเบรตไว้) · >100 ถึง 500: ฝนสุดขั้ว น้ำสูงเพิ่มแบบเชิงเส้น (ถูกจำกัดด้วยเพดาน stage ด้านล่าง)
+      var rRain = M.rain_max_m * (Math.pow(Math.min(1, rain / 100), 0.85) + Math.max(0, rain - 100) / 100 * 0.4);
+      return Math.min(base + rFlow + rRain, base + FR.event_rise_m + 0.5);
     },
     stageRange: function () {
       return FR ? { min: FR.base_stage_m, max: FR.base_stage_m + FR.event_rise_m + 0.5, onset: FR.onset_stage_m, design: DESIGN_S }
