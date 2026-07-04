@@ -103,32 +103,18 @@
             <p class="sim-hint">≥ 30 mm/hr = เสี่ยงน้ำท่วมฉับพลัน</p>
           </div>
 
-          <!-- River flow slider -->
+          <!-- River level slider (flow shown alongside via rating curve) -->
           <div class="sim-row">
             <div class="sim-label-row">
-              <span class="sim-label-text"><i class="ti ti-wave-sine" style="font-size:13px;color:#0284c7;"></i> อัตราการไหลแม่น้ำปัตตานี</span>
-              <span class="sim-cur-val"><span id="simRiverVal">80</span><span class="sim-cur-unit"> m³/s</span></span>
+              <span class="sim-label-text"><i class="ti ti-wave-sine" style="font-size:13px;color:#0284c7;"></i> ระดับน้ำแม่น้ำปัตตานี</span>
+              <span class="sim-cur-val"><span id="simRiverVal">15.2</span><span class="sim-cur-unit"> ม.รทก. · <span id="simRiverFlow">≈ 82</span> m³/s</span></span>
             </div>
             <div class="sim-track-wrap">
-              <input type="range" id="simRiver" class="sim-slider" min="0" max="1200" value="80" step="5" />
-              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .4167)" data-warn="⚠ 500"></span>
+              <input type="range" id="simRiver" class="sim-slider" min="15" max="19" value="15.2" step="0.05" />
+              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .375)" data-warn="⚠ ตลิ่ง 16.5"></span>
             </div>
-            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">300</span><span style="left:calc(9px + (100% - 18px) * .5)">600</span><span style="left:calc(9px + (100% - 18px) * .75)">900</span><span style="left:calc(100% - 9px)">1200</span></div>
-            <p class="sim-hint">≥ 500 m³/s = ล้นตลิ่ง (สถานี X.40A ยะลา · +16.50 ม.รทก.)</p>
-          </div>
-
-          <!-- Dam release slider -->
-          <div class="sim-row">
-            <div class="sim-label-row">
-              <span class="sim-label-text"><i class="ti ti-dam" style="font-size:13px;color:#0284c7;"></i> อัตราระบายเขื่อนบางลาง</span>
-              <span class="sim-cur-val"><span id="simDamLevelVal">60</span><span class="sim-cur-unit"> m³/s</span></span>
-            </div>
-            <div class="sim-track-wrap">
-              <input type="range" id="simDamLevel" class="sim-slider" min="0" max="400" value="60" step="5" />
-              <span class="sim-warn-mark" style="left:calc(9px + (100% - 18px) * .5)" data-warn="⚠ 200"></span>
-            </div>
-            <div class="sim-scale"><span style="left:9px">0</span><span style="left:calc(9px + (100% - 18px) * .25)">100</span><span style="left:calc(9px + (100% - 18px) * .5)">200</span><span style="left:calc(9px + (100% - 18px) * .75)">300</span><span style="left:calc(100% - 9px)">400</span></div>
-            <p class="sim-hint">≥ 200 m³/s = ระบายมาก น้ำถึงเมืองใน ~9 ชม.</p>
+            <div class="sim-scale"><span style="left:9px">15</span><span style="left:calc(9px + (100% - 18px) * .25)">16</span><span style="left:calc(9px + (100% - 18px) * .5)">17</span><span style="left:calc(9px + (100% - 18px) * .75)">18</span><span style="left:calc(100% - 9px)">19</span></div>
+            <p class="sim-hint">≥ +16.50 ม.รทก. (500 m³/s) = ล้นตลิ่ง · สถานี X.40A ยะลา (รวมน้ำเขื่อนบางลางแล้ว)</p>
           </div>
 
           <!-- Simulation duration -->
