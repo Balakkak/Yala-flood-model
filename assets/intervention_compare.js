@@ -516,15 +516,20 @@ window.IVCompare = (function () {
     // ปริมาตรกักเก็บรวมของแก้มลิงที่เปิดอยู่ (ลบ.ม.) — ใช้คิด mass-balance เทียบปริมาตรน้ำท่วม
     retentionStorage: function () { var v = 0; retentionPonds.forEach(function (p) { if (enabledRetention[p.cell]) v += p.storage || 0; }); return v; },
     floodVolumeBefore: function () { return statsCache ? statsCache.before.volume_m3 : 0; },
-    // ---- ระดับน้ำปรับได้ (ฝน/แม่น้ำ/เขื่อน → ระดับน้ำ) ----
-    stageFromInputs: function (rain, river, dam) {
+    // อัตราการไหล (m³/s) จากระดับน้ำแม่น้ำ (ม.รทก.) — rating curve X.40A · ใช้แสดงคู่กับระดับน้ำ
+    flowOf: function (riverLv) {
+      var RV = FR && FR.river; if (!RV) return 0;
+      return riverLv <= RV.rating_h0 ? 0 : RV.rating_a * Math.pow(riverLv - RV.rating_h0, RV.rating_b);
+    },
+    // ---- ระดับน้ำปรับได้ (ฝน + ระดับน้ำแม่น้ำปัตตานี → ระดับน้ำในเมือง) ----
+    stageFromInputs: function (rain, riverLv) {
       if (!FR) return STAGE;
       var M = FR.mapping, base = FR.base_stage_m, onsetRise = FR.onset_stage_m - FR.base_stage_m;
-      var FL = FR.flow || { river_bankfull_cms: 500, river_major_cms: 1015 };
-      var QBANK = FL.river_bankfull_cms, QMAJ = FL.river_major_cms;
+      var RV = FR.river || { rating_h0: 15.058, rating_a: 375.736, rating_b: 0.7806, bankfull_cms: 500, major_cms: 1015 };
+      var QBANK = RV.bankfull_cms, QMAJ = RV.major_cms;
       rain = Math.max(0, rain);
-      // อัตราไหลรวมที่ยะลา = แม่น้ำ(baseline) + ระบายเขื่อน (m³/s) — ไม่นับซ้ำ เพราะเขื่อนอยู่เหนือน้ำ
-      var Q = Math.max(0, river) + Math.max(0, dam);
+      // ระดับน้ำแม่น้ำปัตตานี (ม.รทก.) → อัตราการไหล (rating curve X.40A) → ส่วนยกระดับน้ำในเมือง · เขื่อนบางลางรวมอยู่ในค่านี้แล้ว
+      var Q = riverLv <= RV.rating_h0 ? 0 : RV.rating_a * Math.pow(riverLv - RV.rating_h0, RV.rating_b);
       var rFlow = Q <= QBANK ? onsetRise * (Q / QBANK)
         : onsetRise + Math.min((Q - QBANK) / (QMAJ - QBANK), 1.3) * M.river_extra_m;
       // 0–100 mm/hr: เหมือนเดิม (คาลิเบรตไว้) · >100 ถึง 500: ฝนสุดขั้ว น้ำสูงเพิ่มแบบเชิงเส้น (ถูกจำกัดด้วยเพดาน stage ด้านล่าง)
