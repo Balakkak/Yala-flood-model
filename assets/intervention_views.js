@@ -12,6 +12,7 @@ window.IVViews = (function () {
   var L, lmap, meta, NC, NR;
   var canvas, ctx, floodOverlay, canalLayer = null, canalOn = false;
   var mount3dFn = null, view = "2d";
+  var suppressBulkFocus = false;   // ระหว่างกด "เลือกทั้งหมด" ไม่บินแผนที่ไปทีละจุด
 
   var $ = function (id) { return document.getElementById(id); };
   var fmt = function (n) { return Math.round(n).toLocaleString(); };
@@ -62,6 +63,23 @@ window.IVViews = (function () {
 
   // ---- หลอดผลรวม (การ์ดใต้ "วิธีวิเคราะห์") — สเกล 100% ของปริมาตรน้ำท่วมก่อนมาตรการ:
   //      ฝั่งซ้ายแดง = % ที่ยังท่วมอยู่ · ฝั่งขวาเขียว = % ที่มาตรการที่เปิดรวมกันลดได้ ----
+  // งบประมาณ (บาท) → ข้อความสั้น "~X,XXX ล้านบาท" (>1 พันล้านโชว์พันล้านในวงเล็บด้วย)
+  function fmtBaht(thb) {
+    var m = thb / 1e6;
+    if (m >= 1) {
+      var t = Math.round(m).toLocaleString() + " ล้านบาท";
+      if (m >= 1000) t += " (~" + (Math.round(m / 100) / 10).toLocaleString() + " พันล้าน)";
+      return t;
+    }
+    return Math.round(thb).toLocaleString() + " บาท";
+  }
+  // งบรวมของมาตรการที่ติ๊กอยู่ = ผลบวก data-cost ของทุกแถวที่เลือก (ค่าสมมุติ screening)
+  function selectedBudgetThb() {
+    var sum = 0;
+    allToggleCbs().forEach(function (c) { if (c.checked) sum += (+c.dataset.cost || 0); });
+    return sum;
+  }
+
   function updateTotalGauge(s, total) {
     var red = $("totRed"), green = $("totGreen"), cnt = $("totCount"), det = $("totDetail");
     if (!red || !s) return;
@@ -74,12 +92,17 @@ window.IVViews = (function () {
     $("totLeft").textContent = remain + "%";
     $("totRight").textContent = pct + "%";
     cnt.textContent = total + " มาตรการ";
-    if (!flooded) det.innerHTML = 'ยังไม่มีน้ำท่วมที่ระดับนี้ — กด <b>จำลองน้ำท่วม</b> เพื่อดูผล';
+    // งบประมาณรวมของมาตรการที่ติ๊กอยู่ (โชว์เมื่อเปิดอย่างน้อย 1 มาตรการ)
+    var budgetLine = total > 0
+      ? '<div class="tot-budget"><i class="ti ti-cash"></i> งบประมาณรวมที่เลือก ~<b>' + fmtBaht(selectedBudgetThb()) + '</b>'
+        + ' <span style="color:#94a3b8;font-weight:400;">(ค่าสมมุติ screening — จัดลำดับ benefit/cost ไม่ใช่ราคาจริง)</span></div>'
+      : '';
+    if (!flooded) det.innerHTML = 'ยังไม่มีน้ำท่วมที่ระดับนี้ — กด <b>จำลองน้ำท่วม</b> เพื่อดูผล' + budgetLine;
     else if (total === 0) det.innerHTML = 'ยังไม่เปิดมาตรการ — ติ๊กมาตรการด้านล่างเพื่อดูผลรวม';
     else det.innerHTML = 'ลดปริมาตรน้ำท่วม ~<b>' + fmt(Math.max(0, s.reduced.volume_m3)) + ' ลบ.ม.</b>' +
       ' · อาคารพ้นน้ำ ~<b>' + fmt(Math.max(0, s.reduced.buildings)) + ' หลัง</b>' +
       ' · พื้นที่แห้งลง ~<b>' + fmt(Math.max(0, s.reduced.area_rai)) + ' ไร่</b>' +
-      ' <span style="color:#94a3b8;">· นับน้ำท่วมทั้งพื้นที่บนแผนที่ ไม่จำกัดเขต</span>';
+      ' <span style="color:#94a3b8;">· นับน้ำท่วมทั้งพื้นที่บนแผนที่ ไม่จำกัดเขต</span>' + budgetLine;
   }
 
   // ---- แถวมาตรการโชว์แค่ชื่อ — ปุ่มลูกศรมุมขวากางรายละเอียด (กันสับสนกับการติ๊ก) ----
@@ -188,10 +211,10 @@ window.IVViews = (function () {
   function scheduleImpacts() { clearTimeout(impactTimer); impactTimer = setTimeout(updateMeasureImpacts, 200); }
 
   // toggle มาตรการเสริม (อัปเกรดสถานีสูบเดิม / ขุดลอกคลองเดิม) — จำลองผ่านความจุระบายของ engine
-  function makeExtraToggle(kind, icon, color, title, desc, onChange) {
+  function makeExtraToggle(kind, icon, color, title, desc, onChange, cost) {
     var el = document.createElement("label");
     el.className = "struct-tog";
-    el.innerHTML = '<input type="checkbox" data-kind="' + kind + '">' +
+    el.innerHTML = '<input type="checkbox" data-kind="' + kind + '" data-cost="' + (cost || 0) + '">' +
       '<div><div class="t"><i class="ti ' + icon + '" style="color:' + color + ';"></i> ' + title + '</div>' +
       '<div class="d">' + desc + '</div></div>';
     var cb = el.querySelector("input");
@@ -213,7 +236,7 @@ window.IVViews = (function () {
       var el = document.createElement("label");
       el.className = "struct-tog";
       el.innerHTML =
-        '<input type="checkbox" data-rank="' + lv.rank + '" data-kind="levee">' +
+        '<input type="checkbox" data-rank="' + lv.rank + '" data-kind="levee" data-cost="' + (lv.cost_thb || 0) + '">' +
         '<div><div class="t"><i class="ti ti-shield-half" style="color:#78716c;"></i> ' + lv.label + '</div>' +
         '<div class="d">ป้องกัน ~' + lv.protected + ' หลัง · ~' + (lv.cost_thb / 1e6).toFixed(0) + ' ล้าน฿' +
         (lv.length_m ? ' · ยาว ~' + (lv.length_m / 1000).toFixed(1) + ' กม.' : '') +
@@ -234,40 +257,135 @@ window.IVViews = (function () {
 
         if (view === "2d" && lmap) lmap.panInsideBounds && fitToActive();
       });
-      host.appendChild(el);
+      catBody("levee").appendChild(el);
     });
     // มาตรการเสริมที่ใช้โครงสร้างเดิมของเทศบาล — จำลองผลได้ทันที ไม่ต้องจัดหาที่ดิน
     var pumpN = IVCompare.pumpCount ? IVCompare.pumpCount() : 0;
-    if (pumpN > 0) host.appendChild(makeExtraToggle(
+    if (pumpN > 0) catBody("extra").appendChild(makeExtraToggle(
       "pumpup", "ti-windmill", "#0284c7",
       "เพิ่มกำลังสถานีสูบน้ำเดิม (" + pumpN + " สถานี)",
       "อัปเกรดเครื่องสูบ + เครื่องสำรอง/ไฟสำรอง ที่สถานีสูบของเทศบาลที่มีอยู่แล้ว · เห็นผลรอบย่านรับน้ำของสถานี (รัศมีบริการ ~240 ม.) · ไม่ต้องเวนคืนที่ดิน (screening · อัตราสูบจริงต้อง SWMM)",
-      function (on) { if (IVCompare.togglePumpUpgrade) IVCompare.togglePumpUpgrade(on); }));
+      function (on) { if (IVCompare.togglePumpUpgrade) IVCompare.togglePumpUpgrade(on); },
+      pumpN * 5000000));   // สูบ 5 ล้าน฿/สถานี (ค่าสมมุติตาม cost_note)
     var dkm = IVCompare.dredgeKm ? IVCompare.dredgeKm() : 0;
-    if (dkm > 0) host.appendChild(makeExtraToggle(
+    if (dkm > 0) catBody("extra").appendChild(makeExtraToggle(
       "dredge", "ti-backhoe", "#b45309",
       "ขุดลอกคลอง/คูระบายน้ำเดิม (โครงข่าย ~" + Math.round(dkm) + " กม.)",
       "เพิ่มความจุคลองระบายที่มีอยู่ทั้งโครงข่าย — ทำได้เร็ว งบต่ำ · น้ำตามแนวคลองและพื้นที่ข้างเคียงตื้นลง (screening · หน้าตัด/ความจุจริงต้อง HEC-RAS/SWMM)",
-      function (on) { if (IVCompare.toggleDredge) IVCompare.toggleDredge(on); }));
+      function (on) { if (IVCompare.toggleDredge) IVCompare.toggleDredge(on); },
+      Math.round(dkm * 500000)));      // ขุดลอก 0.5 ล้าน฿/กม. (ค่าสมมุติ screening)
+    syncCats();
   }
   function fitToActive() { /* คงมุมมองเดิม — ไม่บังคับซูม */ }
 
   // โฟกัสไปจุดหนึ่ง (3D บินไป / 2D pan) — ใช้กับรายการมาตรการเชิงข้อมูล
   function focusPoint(lng, lat) {
+    if (suppressBulkFocus) return;   // เลือกทั้งหมด: อย่าบินแผนที่ไปทีละมาตรการ
     if (view === "3d" && IV3D.flyTo) IV3D.flyTo(lng, lat);
     else if (lmap) lmap.flyTo([lat, lng], 15, { animate: true });
   }
 
+  // ================= หมวดมาตรการ + เลือก/ล้างทั้งหมด =================
+  // แบ่งมาตรการเป็นหมวด — หัวหมวดมีติ๊ก "เลือกทั้งหมวด" (checked/บางส่วน) + ปุ่มย่อ/ขยาย
+  var CATS = [
+    { key: "levee",      label: "คันกั้นริมแม่น้ำ",           icon: "ti-shield-half", col: "#78716c" },
+    { key: "retention",  label: "แก้มลิง / บ่อหน่วงน้ำ",       icon: "ti-droplet",     col: "#0d9488" },
+    { key: "bottleneck", label: "คอขวด / เพิ่มท่อระบาย",      icon: "ti-traffic-cone",col: "#ea580c" },
+    { key: "floodgate",  label: "ประตูระบาย / กันน้ำย้อน",     icon: "ti-door",        col: "#7c3aed" },
+    { key: "extra",      label: "มาตรการเสริม (ใช้ของเดิม)",  icon: "ti-tools",       col: "#0284c7" },
+    { key: "canal",      label: "คลองระบายน้ำเส้นใหม่",        icon: "ti-route",       col: "#0891b2" }
+  ];
+  function catOrder(key) { for (var i = 0; i < CATS.length; i++) if (CATS[i].key === key) return i; return 99; }
+  // ได้ body ของหมวด (สร้างหัวหมวดครั้งแรก + แทรกตามลำดับ CATS แม้โหลดแบบ async)
+  function catBody(key) {
+    var host = $("structToggles");
+    var sec = host.querySelector('.cat-group[data-cat="' + key + '"]');
+    if (sec) return sec.querySelector(".cat-body");
+    var m = CATS[catOrder(key)] || { key: key, label: key, icon: "ti-circle", col: "#64748b" };
+    sec = document.createElement("div");
+    sec.className = "cat-group"; sec.dataset.cat = key;
+    if (key === "floodgate") sec.className += " collapsed";   // 23 จุด — ย่อไว้ก่อน ไม่ให้รก
+    sec.innerHTML =
+      '<div class="cat-head">' +
+        '<label class="cat-pick"><input type="checkbox" class="cat-all">' +
+          '<span class="cat-name"><i class="ti ' + m.icon + '" style="color:' + m.col + ';"></i> ' + m.label + '</span>' +
+          '<span class="cat-count"></span></label>' +
+        '<button class="cat-collapse" type="button" title="ย่อ/ขยาย"><i class="ti ti-chevron-up"></i></button>' +
+      '</div><div class="cat-body"></div>';
+    // แทรกให้อยู่ตามลำดับหมวด
+    var groups = [].slice.call(host.querySelectorAll(".cat-group")), before = null;
+    for (var i = 0; i < groups.length; i++) { if (catOrder(groups[i].dataset.cat) > catOrder(key)) { before = groups[i]; break; } }
+    host.insertBefore(sec, before);
+    var catCb = sec.querySelector(".cat-all");
+    catCb.addEventListener("change", function () { setCategory(key, catCb.checked); });
+    sec.querySelector(".cat-collapse").addEventListener("click", function () { sec.classList.toggle("collapsed"); });
+    return sec.querySelector(".cat-body");
+  }
+  // มาตรการทั้งหมด (เฉพาะแถวมาตรการ .struct-tog — ไม่รวมติ๊กหัวหมวด)
+  function allToggleCbs() {
+    return [].slice.call(document.querySelectorAll("#structToggles .struct-tog input[type=checkbox]"));
+  }
+  function catToggleCbs(key) {
+    var b = $("structToggles").querySelector('.cat-group[data-cat="' + key + '"] .cat-body');
+    return b ? [].slice.call(b.querySelectorAll(".struct-tog input[type=checkbox]")) : [];
+  }
+  // อัปเดตติ๊กหัวหมวด (เต็ม/บางส่วน/ว่าง) + ตัวนับ
+  function syncCats() {
+    [].slice.call(document.querySelectorAll("#structToggles .cat-group")).forEach(function (sec) {
+      var cbs = [].slice.call(sec.querySelectorAll(".cat-body .struct-tog input[type=checkbox]"));
+      var on = cbs.filter(function (c) { return c.checked; }).length;
+      var head = sec.querySelector(".cat-all");
+      head.checked = on > 0 && on === cbs.length;
+      head.indeterminate = on > 0 && on < cbs.length;
+      sec.classList.toggle("cat-active", on > 0);
+      var cnt = sec.querySelector(".cat-count"); if (cnt) cnt.textContent = on + "/" + cbs.length;
+    });
+  }
+  function syncSelectAllBtn() {
+    syncCats();
+    var btn = $("btnSelectAll"); if (!btn) return;
+    var cbs = allToggleCbs();
+    var allOn = cbs.length > 0 && cbs.every(function (c) { return c.checked; });
+    btn.classList.toggle("on", allOn);
+    btn.innerHTML = allOn
+      ? '<i class="ti ti-square-off"></i> ล้างทั้งหมด'
+      : '<i class="ti ti-checks"></i> เลือกทั้งหมด';
+  }
+  // เปิด/ปิดหมวดเดียว (ติ๊กหัวหมวด)
+  function setCategory(key, on) {
+    if (IVViews.stopPlay) IVViews.stopPlay();
+    suppressBulkFocus = true;
+    catToggleCbs(key).forEach(function (c) {
+      if (c.checked !== on) { c.checked = on; c.dispatchEvent(new Event("change", { bubbles: true })); }
+    });
+    suppressBulkFocus = false;
+    syncSelectAllBtn();
+  }
+  function setAllMeasures(on) {
+    if (IVViews.stopPlay) IVViews.stopPlay();
+    var btn = $("btnSelectAll");
+    // เปิด/ปิดทุกมาตรการ = รันแบบจำลองซ้ำหลายรอบ (~1–2 วิ) → โชว์สถานะกำลังคำนวณก่อน แล้วค่อยทำงานหนัก
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 spin"></i> กำลังคำนวณ…'; }
+    var run = function () {
+      suppressBulkFocus = true;                   // กดทีเดียว — ไม่บินแผนที่ต่อจุด
+      allToggleCbs().forEach(function (c) {
+        if (c.checked !== on) { c.checked = on; c.dispatchEvent(new Event("change", { bubbles: true })); }
+      });
+      suppressBulkFocus = false;
+      if (btn) btn.disabled = false;
+      syncSelectAllBtn();
+    };
+    // double-rAF ให้ป้าย "กำลังคำนวณ…" วาดก่อน แล้วจึงบล็อกเธรดทำงานหนัก
+    requestAnimationFrame(function () { requestAnimationFrame(run); });
+  }
+
   // ============ มาตรการกายภาพ (แก้มลิง/คอขวด/ประตู) — จำลองผลลดน้ำท่วมรายจุด (screening) ============
   function buildInfoMeasures() {
-    var host = $("structToggles");
     fetch("data/intervention_candidates.geojson?t=" + Date.now()).then(function (r) { return r.json(); }).then(function (fc) {
       var pts = (fc.features || []).filter(function (f) {
         return f.geometry && f.geometry.type === "Point" && (f.properties.kind === "bottleneck" || f.properties.kind === "retention" || f.properties.kind === "floodgate");
       });
       if (!pts.length) return;
-      var wrap = document.createElement("div");
-      wrap.innerHTML = '<div class="info-divider"><i class="ti ti-flask"></i> มาตรการกายภาพแนะนำ (บ่อหน่วง/ขยายท่อ/ประตูระบาย) — ติ๊กเพื่อจำลองผลลดน้ำท่วม (screening · ปริมาตรจริงต้อง SWMM)</div>';
       // แก้มลิงก่อน แล้วคอขวด แล้วประตูระบาย
       pts.sort(function (a, b) {
         var ka = a.properties.kind, kb = b.properties.kind;
@@ -308,6 +426,8 @@ window.IVViews = (function () {
         var cell = mr * NC + mc;
         var cb = el.querySelector("input");
         cb.dataset.kind = kind;
+        // งบ: แก้มลิง/คอขวดมี cost_thb ในข้อมูล · ประตูระบาย 3 ล้าน฿/จุด (ค่าสมมุติ screening)
+        cb.dataset.cost = p.cost_thb || (kind === "floodgate" ? 3000000 : 0);
         // บรรทัดผลรายมาตรการ: แก้มลิงโชว์ความจุบ่อ (mass-balance) · คอขวดโชว์ปริมาตรที่สูบ/ระบายเพิ่ม (screening)
         if (kind === "retention") attachImpact(el, cb, "ret", cell, 'กักน้ำเข้าบ่อ ~<b>' + fmt(p.storage_m3 || 7200) + ' ลบ.ม.</b>');
         else if (kind === "bottleneck") attachImpact(el, cb, "btl", cell, 'สูบ/ระบายเพิ่ม ~<b>12,000 ลบ.ม.</b>');
@@ -323,9 +443,9 @@ window.IVViews = (function () {
           if (window.toggleLayerVisibility) window.toggleLayerVisibility(kind, cb.checked);
           if (cb.checked) focusPoint(lng, lat);
         });
-        wrap.appendChild(el);
+        catBody(kind).appendChild(el);
       });
-      host.appendChild(wrap);
+      syncCats();
     }).catch(function (e) { console.warn("info measures โหลดไม่ได้", e); });
   }
 
@@ -345,7 +465,6 @@ window.IVViews = (function () {
       L.polyline(latlng, { color: "#0891b2", weight: 3.5, opacity: 0.95, lineCap: "round", lineJoin: "round" }).bindPopup(popup).addTo(canalLayer);  // ตัวคลอง
     });
     // toggle ในแผงมาตรการ
-    var host = $("structToggles");
     var el = document.createElement("label");
     el.className = "struct-tog";
     el.innerHTML =
@@ -355,6 +474,8 @@ window.IVViews = (function () {
       '<br><span style="color:#b45309;">ระบายน้ำฝนสะสม/น้ำท้องถิ่นออกจากเมือง — ขนาด/ความจุจริงต้อง HEC-RAS/SWMM</span></div></div>';
     var cb = el.querySelector("input");
     cb.dataset.kind = "canal";
+    var canalMeters = routes.reduce(function (a, rt) { return a + rt.length_m; }, 0);
+    cb.dataset.cost = Math.round(canalMeters * 12000);   // คลองขุดใหม่ 12,000 ฿/ม. (ค่าสมมุติ screening)
     var canalCap = routes.reduce(function (a, rt) { return a + rt.length_m * 6; }, 0);   // หน้าตัด ~6 ตร.ม./ม. (screening)
     attachImpact(el, cb, "canal", 0, 'พาน้ำออก ~<b>' + fmt(canalCap) + ' ลบ.ม.</b>');
     decorateRow(el);
@@ -369,7 +490,8 @@ window.IVViews = (function () {
       updateStats();                                     // นับรวมคลองในสรุปมาตรการ
       if (cb.checked && routes[0]) focusPoint(routes[0].from.lng, routes[0].from.lat);
     });
-    host.appendChild(el);
+    catBody("canal").appendChild(el);
+    syncCats();
   }
 
   // ================= mount =================
@@ -389,6 +511,17 @@ window.IVViews = (function () {
     buildCanals();
     updateStats();
     draw2D();
+
+    // ปุ่ม "เลือก/ล้างทั้งหมด" — ติ๊กมาตรการทุกตัวพร้อมกัน (รวมตัวที่โหลดแบบ async ด้วย เพราะอ่าน ณ เวลากด)
+    var selBtn = $("btnSelectAll");
+    if (selBtn) selBtn.addEventListener("click", function () {
+      var cbs = allToggleCbs();
+      var allOn = cbs.length > 0 && cbs.every(function (c) { return c.checked; });
+      setAllMeasures(!allOn);
+    });
+    // อัปเดตป้ายปุ่มเมื่อผู้ใช้ติ๊ก/ปลดรายตัว (event delegation ครอบ toggle ที่เพิ่มภายหลัง)
+    var stHost = $("structToggles");
+    if (stHost) stHost.addEventListener("change", syncSelectAllBtn);
 
     // controls — โชว์สถานะ "มีโครงสร้าง" เสมอ (เอา UI เปรียบเทียบ ก่อน/หลัง ออก แต่เก็บโค้ดไว้)
     IVCompare.setSplit(0);

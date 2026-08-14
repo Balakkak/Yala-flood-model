@@ -153,9 +153,19 @@ window.IVCompare = (function () {
     // จึงส่งผลเป็น "ปริมาตรที่ดัก/ระบายได้" ไปยังผืนน้ำท้ายน้ำที่จุดนั้นเชื่อมถึง (mass balance)
     retentionPonds.forEach(function (p) {
       if (!enabledRetention[p.cell]) return;
-      for (var k = 0; k < p.cells.length; k++) { var idx = p.cells[k]; if (idx >= 0 && idx < N) d[idx] += 2.5; }
+      // ผลรวมของบ่อ = "ความจุกักเก็บ" (mass-balance) — ห้ามเกินความจุ ไม่ว่าบ่อเล็กหรือใหญ่
+      // ลดความลึกในเซลล์บ่อก่อน (สูงสุด 2.5 ม.) โดยหักจากงบความจุ แล้วเทส่วนที่เหลือไปช่วยผืนน้ำท้ายน้ำ
+      var arrR = afterArrival || baseArrival;
+      var cap = p.storage || 7200, used = 0;
+      for (var k = 0; k < p.cells.length && used < cap; k++) {
+        var idx = p.cells[k]; if (idx < 0 || idx >= N) continue;
+        var rem = STAGE - arrR[idx] - d[idx];                  // ความลึกน้ำที่ยังเหลือในเซลล์บ่อ
+        if (rem <= 0) continue;
+        var take = Math.min(2.5, rem, (cap - used) / CELL_M2); // ไม่เกิน 2.5 ม. และไม่เกินงบที่เหลือ
+        d[idx] += take; used += take * CELL_M2;
+      }
       if (p.eff === undefined) p.eff = downstreamFloodCell(p.cell);
-      applyVolumeRelief(d, p.eff, p.storage || 7200);          // บ่อดักได้เท่าความจุบ่อ
+      if (used < cap) applyVolumeRelief(d, p.eff, cap - used); // ส่วนที่เหลือของความจุ → หักผืนน้ำท้ายน้ำ
     });
     bottleneckList.forEach(function (b) {
       if (!enabledBottleneck[b.cell]) return;
