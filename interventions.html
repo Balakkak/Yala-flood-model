@@ -108,6 +108,10 @@
       background:linear-gradient(90deg,#34d399,#059669); transition:width .35s ease; }
     .tot-detail { margin-top:7px; font-size:11px; color:var(--ink-600); line-height:1.5; }
     .tot-detail b { color:#047857; }
+    .tot-budget { margin-top:7px; padding-top:7px; border-top:1px dashed var(--line);
+      font-size:11.5px; color:var(--ink-700); line-height:1.5; }
+    .tot-budget b { color:#b45309; font-size:12.5px; }
+    .tot-budget .ti { color:#b45309; vertical-align:-1px; margin-right:2px; }
     .cmp-stats { display:grid; grid-template-columns:1fr; gap:7px; margin-top:4px; }
     .cmp-stat { border:1px solid var(--line); border-radius:9px; padding:7px 10px; }
     .cmp-stat .lab { font-size:10.5px; color:var(--ink-500); display:flex; align-items:center; gap:5px; }
@@ -143,6 +147,34 @@
       display:flex; align-items:center; justify-content:center; gap:6px; }
     .lvl-live:hover { background:#e0f2fe; } .lvl-live:disabled { opacity:.6; cursor:default; }
     .lvl-livestatus { font-size:10px; color:var(--ink-500); margin:5px 0 9px; line-height:1.4; }
+    /* ปุ่มเลือก/ล้างมาตรการทั้งหมดพร้อมกัน */
+    .sel-all { border:1px solid var(--line); background:#fff; color:var(--ink-700); font:600 11px 'Sarabun',sans-serif;
+      padding:5px 11px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:5px;
+      transition:background .15s,border-color .15s,color .15s; }
+    .sel-all:hover { background:#f1f5f9; }
+    .sel-all.on { background:#ecfeff; border-color:#a5f3fc; color:#0e7490; }
+    .sel-all:disabled { opacity:.7; cursor:default; }
+    .sel-all .spin { animation:selspin .7s linear infinite; }
+    @keyframes selspin { to { transform:rotate(360deg); } }
+    /* หมวดมาตรการ — หัวหมวดติ๊กเลือกทั้งหมวด + ย่อ/ขยาย */
+    .cat-group { border:1px solid var(--line); border-radius:10px; margin-bottom:9px; overflow:hidden; }
+    .cat-head { display:flex; align-items:center; gap:8px; padding:7px 9px; background:#f8fafc;
+      border-bottom:1px solid transparent; transition:background .15s,border-color .15s; }
+    .cat-group.cat-active .cat-head { background:#eff6ff; border-bottom-color:var(--line); }
+    .cat-pick { flex:1; display:flex; align-items:center; gap:8px; cursor:pointer; min-width:0; }
+    .cat-pick input { accent-color:#0ea5e9; flex:0 0 auto; width:15px; height:15px; }
+    .cat-name { font-size:12px; font-weight:700; color:var(--ink-900); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cat-count { font-size:10.5px; font-weight:600; color:var(--ink-400); flex:0 0 auto; }
+    .cat-group.cat-active .cat-count { color:#0369a1; }
+    .cat-collapse { flex:0 0 auto; width:24px; height:24px; border:none; background:transparent; cursor:pointer;
+      color:var(--ink-400); border-radius:6px; display:grid; place-items:center; padding:0; }
+    .cat-collapse:hover { background:#e2e8f0; color:var(--ink-700); }
+    .cat-collapse .ti { font-size:15px; transition:transform .15s; }
+    .cat-group.collapsed .cat-collapse .ti { transform:rotate(180deg); }
+    .cat-body { padding:9px 9px 1px; }
+    .cat-group.collapsed .cat-body { display:none; }
+    .cat-body .struct-tog:last-child { margin-bottom:0; }
+    .cat-body .struct-tog { margin-bottom:7px; }
     .prot-result { margin-top:8px; padding:9px 11px; border-radius:9px; background:#f0f9ff;
       border:1px solid #bae6fd; font-size:12px; color:var(--ink-700); line-height:1.55; }
     .prot-result b { color:#047857; } .prot-result.none { background:#f8fafc; border-color:var(--line); }
@@ -238,6 +270,9 @@
         <div class="card-body">
           <p style="margin:0 0 9px;font-size:11.5px;color:var(--ink-600);line-height:1.5;">
             เลือกเปิดมาตรการที่จะสร้าง แล้วกด <b>จำลองการท่วม</b> ด้านล่าง — น้ำจะท่วมโดยมีสิ่งก่อสร้างอยู่</p>
+          <div style="display:flex;justify-content:flex-end;margin:0 0 9px;">
+            <button id="btnSelectAll" class="sel-all"><i class="ti ti-checks"></i> เลือกทั้งหมด</button>
+          </div>
           <div id="structToggles"><div style="font-size:12px;color:var(--ink-400);">กำลังโหลดเครื่องจำลอง…</div></div>
           <div class="prot-result none" id="protResult" style="display:none;"></div>
           <p id="cmpPump" style="margin:8px 0 0;font-size:11px;color:#b45309;line-height:1.5;display:none;"></p>
