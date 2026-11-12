@@ -181,7 +181,7 @@ I was the **team lead**:
 - **Talked with users:** gathered requirements from Yala City's urban planning office.
 - **Planned** the work and **designed** the system around one question: which drains should be fixed first?
 - **Wrote code** for the model and the dashboard.
-- **Checked the results** against GISTDA and NASA data.
+- **Checked the data and results:** the elevation data against NASA ICESat-2, and the flood results against GISTDA flood maps.
 - **Presented** the plan on stage and to the Mayor of Yala City. We won **1st place**.
 
 ## 11. What I learned
