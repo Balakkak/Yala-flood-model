@@ -1,200 +1,195 @@
-# ระบบ GIS บริหารจัดการและจำลองน้ำท่วม — เทศบาลนครยะลา
-URL : https://yala-flood-demo.pages.dev
-แดชบอร์ดแผนที่เชิงโต้ตอบสำหรับเมืองยะลา ทำ **2 อย่างหลัก**:
+# 🌊 Yala Flood Analysis System
 
-1. **จำลองน้ำท่วม** — วิเคราะห์จาก **DEM จริง** ว่าบริเวณไหนจะท่วมก่อน-หลัง น้ำมาจากทิศใด
-   และท่วมลึกแค่ไหน เมื่อปรับ ฝน / ระดับแม่น้ำปัตตานี / ระดับเขื่อนบางลาง
-2. **วางแผนแก้โครงสร้าง** — เสนอ *ตำแหน่ง* มาตรการลดน้ำท่วม (คันกั้นริมแม่น้ำ · แก้มลิง ·
-   ท่อ/สถานีสูบ · ประตูระบาย) พร้อมจำลอง **ก่อน-หลังสร้าง** และเช็กตามหลักวิศวกรรม/กฎหมาย
+**🏆 1st Place — Yala Hackathon Season 4 (Jun – Jul 2026)**
 
-> เป็นเครื่องมือระดับ **screening (คัดกรองเบื้องต้น)** — ใช้เลือกจุด/เทียบมาตรการได้
-> ยังไม่ใช่แบบจำลอง hydrodynamic ที่ออกแบบขนาดจริง (ดู [ข้อจำกัด](#ข้อจำกัด--roadmap))
+**An interactive 2D/3D map of Yala City, Thailand, that shows where floodwater spreads and pools, and helps the city choose which flood fixes to build first.**
 
-## เริ่มใช้งาน (dev)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
+![MapLibre](https://img.shields.io/badge/MapLibre%20GL-396CB2?logo=maplibre&logoColor=white)
+![Leaflet](https://img.shields.io/badge/Leaflet-199900?logo=leaflet&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)
+
+**Team Lead** · by [Hidayat Buha](https://github.com/Balakkak) and team · 📄 [Thai technical documentation](README.th.md)
+
+![Intervention planning in 3D: buildings, flood depth and the list of flood-fix measures](docs/screenshots/interventions-3d.jpg)
+
+<p>
+  <img src="docs/screenshots/flood-simulation.jpg" width="49%" alt="Flood simulation: set rainfall and river level, then watch where the water spreads">
+  <img src="docs/screenshots/map-2d.jpg" width="49%" alt="2D map of Yala City with the Pattani River and live water stations">
+</p>
+
+---
+
+## Contents
+
+1. [At a glance](#1-at-a-glance)
+2. [The problem](#2-the-problem)
+3. [What the system does](#3-what-the-system-does)
+4. [How the flood model works](#4-how-the-flood-model-works)
+5. [Data](#5-data)
+6. [How accurate is it?](#6-how-accurate-is-it)
+7. [Limits and next steps](#7-limits-and-next-steps)
+8. [Tech stack and project structure](#8-tech-stack-and-project-structure)
+9. [Run it locally](#9-run-it-locally)
+10. [My role](#10-my-role)
+11. [What I learned](#11-what-i-learned)
+
+---
+
+## 1. At a glance
+
+| | |
+|---|---|
+| **41 / 44** | communities in Yala City hit by recurring floods |
+| **22,129** | buildings in the 3D city model |
+| **9,262** | drain points mapped |
+| **Seconds** | to rerun a rainfall or river-level scenario |
+
+## 2. The problem
+
+Yala, my hometown, floods almost every year. The usual next step is a long and costly feasibility study.
+
+The city's urban planning office did not need just another map. It needed a decision: **which drains and structures should be fixed first?**
+
+## 3. What the system does
+
+The web app has two main windows. Both have a 2D view (Leaflet) and a 3D view (MapLibre).
+
+### 🌊 Flood simulation
+- Move sliders for **rainfall**, the **Pattani River level** and the **Bang Lang Dam level**, and see which areas flood first, where the water comes from, and how deep it gets.
+- Draw an area of heavy rain on the map and run the simulation again.
+- **Live data** for the dam and rainfall comes from the ThaiWater API. If the API cannot be reached, the app uses the last good values it saved.
+- The water level you set carries over to the other window, so you can compare fixes at the same flood level.
+
+### 🛠️ Structural intervention planning
+The app suggests *where* to put flood fixes and simulates the flood **before and after** each one.
+
+| Measure | Where it is placed | Effect simulated? |
+|---|---|:---:|
+| **Riverside levee** | Along the city bank of the Pattani River, avoiding buildings | ✅ Reruns the flood model |
+| **Flood gate / pump station** | Where the levee crosses a road | — |
+| **Retention pond** (*kaem ling*) | Low points where a lot of water collects, on empty land, at least 500 m apart | ✅ |
+| **Pipe / pump at a bottleneck** | Places with high water flow but low drainage, avoiding buildings | ✅ |
+| **Upgrade existing pump stations** | The city's 11 real pump stations | ✅ |
+| **Dredge existing canals** | Along the real canal network (~139 km) | ✅ |
+| **New drainage canal** | Least-cost path from a pond to the river, calculated live in the browser | ✅ |
+| **Hotspot** | Frequent flooding × dense buildings × confirmed by GISTDA | — |
+
+- You can **switch levees on and off live** and see the result right away.
+- A summary box reports numbers from the model: buildings kept dry, and how much flood volume is reduced.
+- **No-Adverse-Impact check:** it counts buildings that were dry before a fix but flood after it.
+- Every suggested point carries an **engineering checklist** (for example a cut-off wall against seepage, protected levee ends, backup pumps and backup power), based on USACE, FHWA HEC-22/24 and ASFPM guidance.
+
+**Finding from the model:** drainage and storage measures (pumps, dredging, ponds, new canals) help most in small to medium floods. In a big event like the November 2025 flood, the river brings in more water than drainage can remove, so a **riverside levee** has to be the main measure, together with the others.
+
+## 4. How the flood model works
+
+**Priority-Flood (minimax connectivity).** Imagine the water rising slowly from the Pattani River. For every cell of the elevation grid, the model finds the **arrival level**: the lowest water level at which that cell connects to the river.
+
+```
+arrival[neighbour] = max( arrival[current], elevation[neighbour] )
+```
+
+It is solved with a priority queue (like Dijkstra's algorithm, but taking the max along the path instead of the sum). From the arrival level we get:
+
+- **Flood order:** cells with a low arrival level flood first.
+- **Flow direction:** D8 directions from the arrival surface.
+- **Depth at water level S:** `depth = S − elevation` for every cell where `arrival ≤ S`.
+
+The sliders turn rainfall, river level and dam level into a water level (in metres above mean sea level) using values **calibrated to the real flood of November 2025** (design event: 18.25 m).
+
+To compare fixes, the **same model runs again** with the fix in place (before vs. after). Python scripts prepare the candidate locations, and the browser reruns the model so levees can be switched on and off live.
+
+## 5. Data
+
+| Layer | Source |
+|---|---|
+| Elevation (DEM, 30 m, bare-earth) | FABDEM V1-2, checked against NASA ICESat-2 satellite LiDAR (3,924 points) |
+| Buildings | Building footprints (22,129 buildings) |
+| Drainage | Yala City Municipality: 9,262 drain points, 11 pump stations, ~139 km of canals |
+| Rivers and roads | OpenStreetMap, with the Pattani River checked by hand |
+| Real flood extent | GISTDA satellite flood maps (used to check the model) |
+| Live water data | ThaiWater API (dam and rainfall) |
+
+All layers use WGS 84 / UTM zone 47N (EPSG:32647).
+
+## 6. How accurate is it?
+
+The model is checked against **independent flood data from GISTDA** (three layers stacked: satellite flood polygons, riverside flood points and official overflow lines). `npm test` reruns this check.
+
+| Metric | Model | Baseline (elevation only) |
+|---|---|---|
+| ROC-AUC (confirmed by ≥ 1 source) | 0.75 | 0.76 |
+| ROC-AUC (confirmed by ≥ 2 sources) | 0.82 | 0.83 |
+| Spearman ρ (arrival level vs. flood frequency) | −0.31 | — |
+
+**An honest reading:**
+- The model is clearly better than a random guess (0.5), so it does find the risky areas.
+- At 30 m resolution it is about as good as (slightly below) ranking cells by elevation alone. Elevation is the main driver at this scale. The connectivity model adds the most value in *flood order and direction*, which elevation alone cannot give.
+- The DEM itself has a vertical error of about **±5.45 m** compared with ICESat-2. This is the main reason absolute depths are not exact.
+
+## 7. Limits and next steps
+
+This is a **screening tool**. It is good for choosing locations and comparing measures. It is **not** a hydrodynamic model for designing real structures.
+
+**It cannot yet:** size levees (height, foundation), size ponds and pipes for a return period, model seepage, model the real downstream impact, or model flow over time. The levee model also treats a levee as 100% effective, which is an upper bound.
+
+**Next steps:**
+1. LiDAR elevation data (±0.15 m) instead of the 30 m DEM.
+2. Calibrate each measure with HEC-RAS 2D and EPA SWMM, plus soil surveys.
+3. A LISFLOOD-FP 2D model is already in [`lisflood/`](lisflood/) as a middle step.
+4. More measures, such as raised roads as a second defence line and ring levees around hospitals.
+
+## 8. Tech stack and project structure
+
+| Part | Tools |
+|---|---|
+| Web app | HTML, CSS, JavaScript (static multi-page site, no bundling needed) |
+| Maps | MapLibre GL (3D terrain, buildings, water surface), Leaflet (2D) |
+| Data prep and analysis | Python scripts |
+| Raster data | GeoTIFF |
+| Speed | A SharedWorker caches the large data files for every page and tab, so switching pages does not download them again |
+| Dev server | Vite (also used as a CORS proxy for live data) |
+
+```
+index.html            3D flood simulation (MapLibre) + 3D city
+dashboard.html        2D flood simulation (Leaflet) + control panel
+interventions.html    Structural intervention planning (2D/3D)
+assets/               flood engine, intervention engine, 2D/3D views, live data, navigation
+data/                 DEM, buildings, roads, waterways, GISTDA floods, intervention results
+scripts/              Python data preparation, intervention analysis, model validation
+lisflood/             LISFLOOD-FP 2D model (next step)
+docs/                 methodology, data checklist, pitch script
+```
+
+## 9. Run it locally
+
 ```bash
-npm install          # ครั้งแรกครั้งเดียว
-npm run dev          # หรือ ./scripts/START_SERVER.sh
-```
-เปิด **http://localhost:5173/** (Vite เสิร์ฟ `index.html` ที่รากให้อัตโนมัติ) — เข้าผ่านหน้า `login.html` ก่อน
-
-> ต้องเปิดผ่าน dev server เท่านั้น — เปิดไฟล์ตรง ๆ (`file://`) จะโหลด DEM/GeoJSON ไม่ได้ เพราะ `fetch()` ถูกบล็อก
-
-## Build & Deploy (production)
-เว็บนี้เป็น **static multi-page** (path สัมพัทธ์ + ไลบรารีจาก CDN + fetch ข้อมูลตอนรันไทม์)
-Vite ใช้แค่เป็น dev server (proxy CORS) — ตอน deploy ไม่ต้อง bundle
-```bash
-npm run build        # → bash scripts/build_static.sh สร้างโฟลเดอร์ dist/ (คัดเฉพาะไฟล์ที่ใช้ตอนรัน)
-npm run preview      # เสิร์ฟ dist/ ที่ http://localhost:8080/
-```
-อัปโหลด `dist/` ไปโฮสต์ static ใดก็ได้ (Netlify / Vercel / GitHub Pages / nginx / S3) — ใช้ path สัมพัทธ์ วางที่ root หรือ subpath ก็ได้
-
-> **ข้อมูลสด (เขื่อน/ฝน) บน production:** `assets/live_status.js` ไล่ลำดับ direct → vite proxy → `allorigins`
-> ให้อัตโนมัติ (ThaiWater API รองรับ CORS โดยตรง) — ถ้าต่อ API ไม่ได้ จะ fallback ไปใช้ค่าที่ **แคชไว้** (last-known-good)
->
-> ไลบรารี CDN ปักเวอร์ชันแล้วทั้งหมด (leaflet 1.9.4 · maplibre 4.7.1 · tabler-icons 3.44.0) กันหน้าพังเวลา CDN ออกเวอร์ชันใหม่
-
-## หน้าเว็บ & การนำทาง
-แบ่งเป็น **2 หน้าต่างหลัก** เลือกบนแถบบน · การเลือก **2D/3D อยู่บนแผนที่** (ที่เดียว ไม่ซ้ำซ้อน):
-
-| หน้าต่าง | 2D | 3D |
-|----------|-----|-----|
-| **🌊 จำลองน้ำท่วม** | `dashboard.html` (Leaflet) | `index.html` (MapLibre + เมือง 3D) |
-| **🛠️ แก้โครงสร้าง** | `interventions.html` (สลับในหน้า) | เหมือนกัน (ปุ่ม 2D/3D บนแผนที่) |
-
-- **ระดับน้ำที่จำลองไหลข้ามทุกหน้า** — เก็บใน `localStorage["yalaSim"] = {rain, river, dam}`
-  ตั้งระดับในหน้าจำลอง → เข้าหน้าแก้โครงสร้าง จะใช้ระดับเดิมทันที (มีแถบแจ้ง)
-- **จำมุมมองล่าสุด** — `localStorage["yalaView"]` (2d/3d) ทำให้กดหน้าต่างไหนก็เปิดมุมมองที่เลือกไว้
-- ตรรกะแถบนำทางรวมที่ [`assets/nav.js`](assets/nav.js)
-- **SharedWorker กลาง** ([`assets/shared_worker.js`](assets/shared_worker.js) + shim [`assets/shared_data.js`](assets/shared_data.js)) —
-  แคชไฟล์ `data/*` ให้ทุกหน้า/แท็บ (in-memory + CacheStorage พร้อม ETag revalidation → สลับหน้าไม่โหลด
-  ข้อมูลหลาย MB ซ้ำ แม้ fetch จะติด `?t=` bust cache) และดึงข้อมูลสดเขื่อน/ฝนชุดเดียวแจกทุกหน้า
-  · เบราว์เซอร์ไม่มี SharedWorker (เช่น Chrome Android) → ทำงานแบบเดิมอัตโนมัติ
-
-## โครงสร้างโปรเจกต์
-```
-index.html                     🌊 จำลองน้ำท่วม 3D (MapLibre) + เมืองยะลา 3D
-dashboard.html                 🌊 จำลองน้ำท่วม 2D (Leaflet) + แผงควบคุมการจำลอง
-interventions.html             🛠️ แก้โครงสร้าง — เสนอ/จำลองมาตรการ (2D/3D)
-city3d.html                    ฉาก 3D ที่ถูกฝัง (iframe) ในหน้า dashboard
-login.html                     ด่านล็อกอิน (client-side gate สำหรับเดโม)
-assets/
-  nav.js                       แถบนำทาง 2 หน้าต่าง + จำมุมมอง (yalaView) + ระดับน้ำร่วม
-  auth.js                      ด่านล็อกอินฝั่ง client (sessionStorage)
-  styles.css                   สไตล์ทั้งหมด
-  live_status.js               ดึงข้อมูลสด (เขื่อน/ฝน) + แคช last-known-good + ป้ายสถานะ
-  geotiff.min.js               ไลบรารีอ่าน GeoTIFF (vendored)
-  — จำลองน้ำท่วม —
-  flood_analysis.js            ตัววิเคราะห์การแพร่น้ำท่วม (Priority-Flood) หน้า 2D
-  lisflood_viewer.js           ตัวแสดงเฟรมน้ำท่วมจากโมเดล LISFLOOD
-  — แก้โครงสร้าง —
-  intervention_compare.js      engine กลาง: โหลด grid + รัน Priority-Flood ก่อน/หลังยกคันกั้น + สถิติ
-  intervention_views.js        UI + วาด 2D (Leaflet canvas) + สไลเดอร์ระดับน้ำ + toggle มาตรการ
-  intervention_3d.js           มุมมอง 3D (MapLibre): terrain + อาคาร + ผิวน้ำ + โมเดลคันกั้น/บ่อ/สูบ
-data/                          ชั้นข้อมูลที่เว็บเรียกใช้
-  output_fabdem.tif            DEM (FABDEM V1-2, 30 ม., bare-earth · ตรวจ ICESat-2 ±5.45 ม.)
-  dem_grid.json                DEM เป็น grid + channel (ทางน้ำ) + drain_cm (ความจุระบาย) — engine ใช้
-  flood_response.json          ค่าปรับเทียบ input→ระดับน้ำ (ตลิ่ง 14.0 · เริ่มท่วม 15.25 · เหตุการณ์ 18.25)
-  yala_boundary.geojson        ขอบเขตเมือง (mask + คิดสถิติ)
-  yala_waterways.geojson       แนวแม่น้ำปัตตานีหลัก (ใช้วางคันกั้นริมตลิ่ง)
-  yala_roads.geojson           ถนน OSM (หลบวางโครงสร้าง + หาจุดประตูระบาย)
-  yala_buildings.geojson       อาคาร (exposure + footprint กันวางทับ)
-  yala_flood_gistda_kmz.geojson น้ำท่วมจริงจากดาวเทียม GISTDA (ground truth ยืนยัน hotspot)
-  buildings_grid.json          จำนวนอาคารต่อเซลล์ (engine ใช้)
-  intervention_candidates.geojson จุด/แนวมาตรการทั้งหมด (คันกั้น·แก้มลิง·ท่อ/สูบ·ประตู·จุดเสี่ยง)
-  intervention_sim.json        เซลล์คันกั้น + ผลก่อน-หลัง (ให้ engine รันซ้ำในเบราว์เซอร์)
-  intervention_summary.json    สรุปจัดอันดับ + benefit/cost + checklist หลักการ/กฎหมาย
-  (และชั้นข้อมูล geojson/json อื่น ๆ ของยะลา)
-scripts/                       สคริปต์เตรียมข้อมูล (Python) + build_static.sh + START_SERVER.sh
-  analyze_interventions.py     สร้าง intervention_* ทั้งหมด (หัวใจของหน้าแก้โครงสร้าง)
-  validate_model.js            ตรวจความถูกต้องเทียบ GISTDA (รันตอน npm test)
-lisflood/                      โมเดล LISFLOOD (inputs, src, run.sh) + เฟรมผลลัพธ์
-terrain/                       terrain tiles สำหรับมุมมอง 3D
-docs/                          เอกสารโปรเจกต์ + data_checklist_yala.xlsx (เช็กลิสต์แหล่งข้อมูล)
-raw/                           ข้อมูลดิบ/ตัวกลางขนาดใหญ่ (zip, tar.gz, overpass)
+npm install
+npm run dev          # opens http://localhost:5173/
+npm test             # checks the data files and reruns the GISTDA validation
+npm run build        # builds the static site into dist/
 ```
 
-## วิธีวิเคราะห์
+Open it through the dev server, not as a local file, because the browser blocks loading the data files from `file://`.
 
-### 1) จำลองน้ำท่วม — Priority-Flood (minimax connectivity)
-มองว่าระดับน้ำค่อย ๆ ยกตัวจากแม่น้ำปัตตานี แล้วหาสำหรับทุกเซลล์ของ DEM ว่า **arrival level**
-(ระดับน้ำต่ำสุดที่เซลล์นั้นเชื่อมกับแหล่งน้ำ) เท่าไร → ได้ **ลำดับท่วมก่อน-หลัง · ทิศทางไหล (D8) ·
-ความลึก ณ ระดับผิวน้ำ S** (`depth = S − elevation` เฉพาะเซลล์ที่ `arrival ≤ S`)
+## 10. My role
 
-สไลเดอร์ ฝน/แม่น้ำ/เขื่อน → แปลงเป็นระดับน้ำ (ม.รทก.) ผ่านค่าปรับเทียบใน `flood_response.json`
-ที่ calibrate กับเหตุการณ์จริง **พ.ย. 2568** (เหตุการณ์ออกแบบ = 18.25 ม.รทก.)
+I was the **team lead**:
 
-### 2) แก้โครงสร้าง — [`scripts/analyze_interventions.py`](scripts/analyze_interventions.py)
-รันโมเดลน้ำท่วม **ตัวเดียวกัน** ซ้ำ (before/after) เพื่อเลือกและวัดผลมาตรการ ทำงานเป็นชั้น:
+- **Talked with users:** gathered requirements from Yala City's urban planning office.
+- **Planned** the work and **designed** the system around one question: which drains should be fixed first?
+- **Wrote code** for the model and the dashboard.
+- **Checked the results** against GISTDA and NASA data.
+- **Presented** the plan on stage and to the Mayor of Yala City. We won **1st place**.
 
-**สัญญาณที่คำนวณ:** `arrival` (ลำดับท่วม) · `flowAcc` (D8 น้ำไหลมารวม) · `mdist` (ระยะถึงแม่น้ำหลัก) ·
-`occupied` (rasterize รอยอาคาร+ถนน กันวางทับ) · `observed` (GISTDA ยืนยัน)
+## 11. What I learned
 
-**มาตรการทั้งหมด + เกณฑ์วางตำแหน่ง:** (เพิ่มเติม: คลองระบายน้ำเส้นใหม่ least-cost จากแอ่งแก้มลิง → แม่น้ำ คำนวณสดในเบราว์เซอร์)
+- **Start from the real need.** The city planning office needed a decision, not a map, so we answered one question: which drains should be fixed first?
+- **Earn trust with evidence.** We checked the results against GISTDA flood maps and the real 2025 flood.
+- **Lead with the decision.** Presenting to the Mayor taught me to open with the recommendation and keep the method as backup.
 
-| มาตรการ | วางที่ไหน | จำลองผลได้? |
-|---------|-----------|:---:|
-| **คันกั้นริมแม่น้ำ** | ริมตลิ่งฝั่งเมือง (`mdist=1`) ตลอดแนวแม่น้ำปัตตานี · หลบรอยอาคาร | ✅ รัน flood ซ้ำ |
-| **ประตูระบาย/สถานีสูบ** | จุดที่คันกั้นตัดถนน (interior drainage บังคับ) | — |
-| **แก้มลิง** | ก้นกระทะ `flowAcc≥p99` บนเซลล์ว่าง · เว้นระยะ ≥500 ม. | ✅ ผ่านความจุระบาย (รัศมีบริการ ~180 ม.) |
-| **ท่อ/สูบ (คอขวด)** | `flowAcc≥p96` **และ** `drain<10` · หลบอาคาร · เว้นระยะ | ✅ ผ่านความจุระบาย (รัศมี ~150 ม.) |
-| **อัปเกรดสถานีสูบเดิม** | ตำแหน่งจริง 11 สถานีของเทศบาล (`yala_pump_stations`) | ✅ ผ่านความจุระบาย (รัศมีย่านรับน้ำ ~240 ม.) |
-| **ขุดลอกคลองเดิม** | ตามโครงข่ายคลองจริง ~139 กม. (`yala_drainage_network_filtered`) | ✅ ผ่านความจุระบายตามแนวคลอง |
-| **จุดเสี่ยง (hotspot)** | ท่วมบ่อย × อาคารแน่น × ตรง GISTDA (หมุดอ้างอิง) | — |
+---
 
-> มาตรการกลุ่ม **ระบาย/หน่วง** (สูบ · ขุดลอก · แก้มลิง · คลองใหม่) จำลองแบบ "ลดความลึกรอบรัศมีบริการ"
-> — เห็นผลชัดที่น้ำท่วม**ระดับเริ่ม–ปานกลาง** · ที่เหตุการณ์ออกแบบ แม่น้ำเทน้ำเข้ามากกว่าที่ระบบระบายจะเอาออกทัน
-> ต้องใช้**คันกั้นริมแม่น้ำ**เป็นมาตรการหลักร่วม (สอดคล้องเหตุการณ์จริง พ.ย. 2568) · ปริมาตร/อัตราจริงต้องยืนยันด้วย SWMM
-
-**ถูกต้องตามหลักการ/กฎหมาย** (อ้างอิง USACE ULDC · FHWA HEC-22/24 · แก้มลิงพระราชดำริ · ASFPM):
-- **No-Adverse-Impact** — นับอาคารที่ "แห้ง→ท่วม" หลังสร้าง + เตือนว่าต้องยืนยันด้วย HEC-RAS 2D
-  (โมเดล connectivity ประเมินผลกระทบท้ายน้ำ/ฝั่งตรงข้ามไม่ได้)
-- ทุกหมุดพก **checklist องค์ประกอบที่ต้องมี** (cutoff wall กันซึม · ต่อปลายกัน flanking ·
-  ประตูจับจังหวะน้ำขึ้น-ลง · ปั๊มสำรอง+ไฟสำรอง ฯลฯ) โผล่ใน popup
-
-หน้าเว็บโหลดผลลัพธ์ (`intervention_*`) มาแสดง แล้ว [`intervention_compare.js`](assets/intervention_compare.js)
-รัน Priority-Flood ในเบราว์เซอร์ให้ **จำลองเปิด/ปิดคันกั้นสด ๆ** ได้
-
-📄 **รายละเอียดเต็ม + พารามิเตอร์ + ผลตรวจสอบความถูกต้อง:** ดู [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
-
-## อัปเดตล่าสุด (3 ก.ค. 2569)
-
-**บั๊กที่แก้แล้ว (รอบสอง — จากการไล่ทดสอบทุกฟีเจอร์):**
-- ผืนน้ำ 3D ยังถูกตัดเป็นเส้นตรงตามขอบกริด DEM (เห็นชัดเมื่อมองจากมุมสูง) — เดิม fade ไปคูณกับ
-  *ความลึก* แต่ค่า alpha ของน้ำมีขั้นต่ำ ~0.42 ทันทีที่ลึกเกิน 3 ซม. แถมโฟมทำขอบขาวสว่างขึ้นอีก
-  → ส่ง edge fade ไปคูณ **alpha** ใน fragment shader (แก้ทั้ง `index.html` · `intervention_3d.js` ·
-  `city3d.html` ซึ่งเดิมไม่มี fade เลย)
-- แก้มลิง/คอขวด/คลองระบายใหม่ เปิดแล้วได้ **0% เสมอ** — จุดวางอยู่บนเส้นทางน้ำหลากต้นทางที่สูงกว่า
-  ระดับน้ำแม่น้ำท่วมถึง (arrival 19–26 ม. > เหตุการณ์ออกแบบ 18.25) วงลดความลึกจึงไม่เคยทับพื้นที่ท่วม
-  → เปลี่ยนเป็น **mass-balance**: กระจาย "ปริมาตรที่ดัก/ระบายได้" (ความจุบ่อ · หน้าตัดคลอง×ความยาว ·
-  อัตราสูบ) ไปยังผืนน้ำท้ายน้ำที่จุดนั้นเชื่อมถึง (BFS ตามเส้นทางน้ำ) — สอดคล้องกับกล่อง mass-balance เดิม
-  และเห็นผลชัดที่น้ำระดับเริ่ม–กลางตามที่ UI อธิบาย
-- ฝั่ง "ก่อนสร้าง" ไม่หักความจุระบายเดิมของเมือง (สถิติหัก แต่ภาพไม่หัก) ทำให้ (ก) แผนที่โชว์น้ำลึกเกิน
-  สถิติ และ (ข) มีเซลล์เขียว "แห้งลงหลังมีมาตรการ" โผล่ทั้งที่ยังไม่เปิดมาตรการใด → 2D/3D หักระบายเดิม
-  ทั้งสองฝั่ง · สีเขียวแสดงเฉพาะผลที่มาจากมาตรการจริง (ฝั่ง 3D เดิมยังเอาความจุของมาตรการไปหักฝั่ง
-  "ก่อน" ด้วย — เพิ่ม attribute แยกก่อน/หลัง)
-- CDN เดียว (unpkg) ไม่มีทางหนี — โหลดพลาดครั้งเดียว = หน้าขาวทั้งจอ (เจอจริงระหว่างทดสอบ:
-  `maplibregl is not defined`) → เพิ่ม fallback ไป jsdelivr (ไฟล์ npm เดียวกัน SRI เดิม) ทั้ง Leaflet/
-  MapLibre js+css ทุกหน้า — ทดสอบด้วยการบล็อก unpkg แล้วทุกหน้ายังทำงาน
-
-**บั๊กที่แก้แล้ว (รอบแรก):**
-- ไอคอน Tabler ไม่ขึ้นทุกหน้า — URL CDN ขาด `/dist/` + SRI hash ผิด → แก้ทั้ง 5 หน้า
-- ตั้งระยะเวลาจำลอง 3/7 วัน แล้วน้ำท่วมเองทั้งที่สไลเดอร์เป็น 0 ทุกตัว — ตัวคูณระยะเวลาไปบวกระดับน้ำตรง ๆ
-  → เปลี่ยนเป็นขยาย "ส่วนยกจากตัวขับ" ตามสัดส่วน (แก้ทั้ง 2D และ 3D)
-- วาดพื้นที่ฝนตกหนักแล้วกดจำลองซ้ำ โซนฝนไม่มีผล — โมเดลไม่ rebuild → เพิ่ม dirty flag บังคับ rebuild
-- เปิด `interventions.html?v=2d` แล้วปุ่ม 2D/3D ติด active พร้อมกันสองปุ่ม
-- ค่าเขื่อนระบาย/ไหลเข้า = 0 ถูกตีความเป็น "ไม่มีข้อมูล" (แสดง `--`)
-
-**ความสมจริงของภาพจำลอง:**
-- เอาโพลิกอน "โซนป้องกันได้" เส้นประสีฟ้า (hull ขอบเหลี่ยม) ออก — เหลือกำแพงคันกั้น 3D ตามแนวเซลล์จริง
-- เปิดคันกั้นแล้วน้ำฉากหลังนอกเขตค่อย ๆ ตื้น/จางเข้าหาเมือง (BFS feather ~420 ม. ไม่ข้ามร่องแม่น้ำ)
-  แทนการเกิด "หน้าผาน้ำ" ตัดตรงตามเส้นเขตเทศบาล
-- ผืนน้ำจางนุ่มก่อนถึงขอบกริด DEM/กรอบวิเคราะห์ทุกมุมมอง (2D/3D/dashboard) — ไม่ถูกตัดเป็นเส้นตรงตามขอบข้อมูล
-
-**มาตรการป้องกันเพิ่ม + จำลองผลได้จริง:**
-- เพิ่ม **อัปเกรดสถานีสูบน้ำเดิม 11 สถานี** และ **ขุดลอกคลอง/คูระบายเดิม ~139 กม.** (ใช้ข้อมูลโครงสร้างจริงของเทศบาล)
-- คลองระบายน้ำเส้นใหม่มีผลระบายจริงตามแนวคลอง (เดิมเป็นแค่เส้นบนแผนที่)
-- แก้มลิง/คอขวดเปลี่ยนจากแผ่นสี่เหลี่ยมค่าคงที่ → วงกลมรัศมีบริการไล่ระดับ เห็นผลบนแผนที่ชัด
-- กล่องสรุปรายงานตัวเลขจริงจากโมเดล (อาคารพ้นน้ำ / % ปริมาตรที่ลด) + คำอธิบายว่ามาตรการระบายเห็นผลตามระดับน้ำ
-
-## ข้อจำกัด & roadmap
-เป็นระดับ **screening** บน DEM 30 ม. (±5 ม.) — บอก *ลำดับ/ทิศ/พื้นที่เสี่ยง* และ *เลือก/เทียบมาตรการ* ได้
-แต่ **ยังทำไม่ได้** (ต้องต่อยอด): ขนาด/ความสูง/ฐานรากคันกั้น · ปริมาตรบ่อ/ขนาดท่อตาม return period ·
-seepage/geotech · ผลกระทบท้ายน้ำจริง · อัตราการไหลเชิงเวลา
-
-**สิ่งที่อยากทำต่อ (wishlist):**
-1. **จูนสิ่งก่อสร้าง/มาตรการให้สมจริงขึ้น** — calibrate รัศมีบริการและความจุระบายของแต่ละมาตรการกับผล
-   SWMM/HEC-RAS จริง · ขนาด-ความสูง-แนวคันกั้นตามแบบวิศวกรรม · จำลองผลอ้อม/ผลกระทบท้ายน้ำ
-   (ตอนนี้โมเดล connectivity ให้คันกั้นกันน้ำได้ 100% ซึ่งเป็น upper bound — ของจริงมี flanking/seepage/ท่วมซ้อนจากฝน)
-2. **เพิ่มมาตรการป้องกันแบบใหม่** — เช่น ยกถนนเป็นคันรอง (secondary defense) · คันกั้นวงแหวนรอบจุดเสี่ยง
-   (ring levee ล้อมโรงพยาบาล/ย่านเศรษฐกิจ) · บ่อหน่วงใต้ดิน · ประตูน้ำต้นคลอง + ระบบเตือนภัยล่วงหน้า
-
-ต้องใช้ **LiDAR (±0.15 ม.) + HEC-RAS 2D + EPA SWMM + เจาะสำรวจดิน** เป็นขั้นถัดไป
-(มี [`lisflood/`](lisflood/) LISFLOOD-FP 2D เป็นก้าวกลาง)
-
-## การทดสอบ
-```bash
-npm test     # ตรวจความครบของ data/asset (scripts/*.test.mjs) + validation (ROC-AUC/POD/FAR/CSI)
-```
-
-## พิกัดมาตรฐาน
-WGS84 / UTM Zone 47N — **EPSG:32647** (ใช้กับทุกชั้นข้อมูลและการคำนวณระยะ/พื้นที่)
+📄 Full technical documentation in Thai: [README.th.md](README.th.md) · Methodology: [docs/METHODOLOGY.md](docs/METHODOLOGY.md)
