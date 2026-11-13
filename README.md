@@ -2,7 +2,7 @@
 
 **🏆 1st Place — Yala Hackathon Season 4 (Jun – Jul 2026)**
 
-**An interactive 2D/3D map of Yala City, Thailand, that shows where floodwater spreads and pools, and helps the city choose which flood fixes to build first.**
+**A flood decision-support system for Yala City, Thailand: an interactive 2D/3D map that shows which areas flood first and where water pools, and tests where levees, retention ponds and better drainage could cut repeat flooding.**
 
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
 ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
@@ -48,9 +48,9 @@
 
 ## 2. The problem
 
-Yala, my hometown, floods almost every year. The usual next step is a long and costly feasibility study.
+Yala, my hometown, floods almost every year, in the same places: 41 of 44 communities. Each year the city falls back on sandbags, pumps and evacuation, and the water comes back the next year.
 
-The city's urban planning office did not need just another map. It needed a decision: **which drains and structures should be fixed first?**
+To fix the cause, the city has to decide **what to build and where**, but a site survey for every option takes a long time and a large budget. This system helps the city screen the options first.
 
 ## 3. What the system does
 
@@ -179,14 +179,14 @@ Open it through the dev server, not as a local file, because the browser blocks 
 I was the **team lead**:
 
 - **Talked with users:** gathered requirements from Yala City's urban planning office.
-- **Planned** the work and **designed** the system around one question: which drains should be fixed first?
+- **Planned** the work and **designed** the system around one question: what should the city build, and where, to cut repeat flooding?
 - **Wrote code** for the model and the dashboard.
 - **Checked the data and results:** the elevation data against NASA ICESat-2, and the flood results against GISTDA flood maps.
 - **Presented** the plan on stage and to the Mayor of Yala City. We won **1st place**.
 
 ## 11. What I learned
 
-- **Start from the real need.** The city planning office needed a decision, not a map, so we answered one question: which drains should be fixed first?
+- **Start from the real need.** The city planning office needed a decision, not a map, so we answered one question: what should the city build, and where, to cut repeat flooding?
 - **Earn trust with evidence.** We checked the results against GISTDA flood maps and the real 2025 flood.
 - **Lead with the decision.** Presenting to the Mayor taught me to open with the recommendation and keep the method as backup.
 
