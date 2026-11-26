@@ -25,8 +25,8 @@ lisflood/inputs/
 # หมายเหตุ: terrain/ (tiles 3D), data/*.geojson และ lisflood/frames/ ถูก track ไว้
 # เพราะแอปต้องใช้ตอนรัน — ถ้าต้องการ repo เล็กลง พิจารณาย้าย terrain ไป Git LFS/CDN
 
-# Claude Code local settings (per-user)
-.claude/settings.local.json
+# Claude Code settings (local only)
+.claude/
 
 # Local Netlify folder
 .netlify
